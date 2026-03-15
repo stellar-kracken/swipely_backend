@@ -1,0 +1,10 @@
+import type { FastifyInstance } from "fastify";
+import { assetsRoutes } from "./assets.js";
+import { bridgesRoutes } from "./bridges.js";
+import { websocketRoutes } from "./websocket.js";
+
+export async function registerRoutes(server: FastifyInstance) {
+  server.register(assetsRoutes, { prefix: "/api/v1/assets" });
+  server.register(bridgesRoutes, { prefix: "/api/v1/bridges" });
+  server.register(websocketRoutes, { prefix: "/api/v1/ws" });
+}
