@@ -4,6 +4,51 @@ import { logger } from "./logger.js";
 
 const horizonUrl = config.STELLAR_HORIZON_URL;
 
+export class HorizonTimeoutError extends Error {
+  constructor(message = "Horizon API request timed out") {
+    super(message);
+    this.name = "HorizonTimeoutError";
+  }
+}
+
+export class HorizonClientError extends Error {
+  constructor(message: string, public readonly originalError: unknown) {
+    super(message);
+    this.name = "HorizonClientError";
+  }
+}
+
+/**
+ * Executes a Horizon API call with a configured timeout.
+ * @template T - The type of the expected result
+ * @param {Promise<T>} promise - The Horizon API call promise
+ * @returns {Promise<T>} The result of the API call if it resolves before the timeout
+ * @throws {HorizonTimeoutError} If the request exceeds the configured timeout duration
+ * @throws {HorizonClientError} If another client-side or connectivity error occurs
+ */
+export async function withHorizonTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new HorizonTimeoutError(`Horizon API request exceeded ${config.HORIZON_TIMEOUT_MS}ms`));
+    }, config.HORIZON_TIMEOUT_MS);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    return result;
+  } catch (error) {
+    if (error instanceof HorizonTimeoutError) {
+      throw error;
+    }
+    logger.error({ error }, "Horizon client connectivity error");
+    throw new HorizonClientError((error as Error).message || "Failed to connect to Horizon API", error);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
+}
+
 /**
  * Get a configured Horizon server instance
  */
@@ -22,7 +67,9 @@ export async function getStellarAssetSupply(
 
   try {
     const asset = new StellarSdk.Asset(assetCode, issuer);
-    const accounts = await server.assets().forCode(assetCode).forIssuer(issuer).call();
+    const accounts = await withHorizonTimeout<any>(
+      server.assets().forCode(assetCode).forIssuer(issuer).call()
+    );
 
     if (accounts.records.length > 0) {
       return parseFloat(accounts.records[0].amount);
@@ -46,11 +93,27 @@ export async function getOrderBook(
   const server = getHorizonServer();
 
   const base = new StellarSdk.Asset(baseCode, baseIssuer);
-  const counter = counterIssuer
+  const counter = counterIssuer && counterCode !== "XLM"
     ? new StellarSdk.Asset(counterCode, counterIssuer)
     : StellarSdk.Asset.native();
 
-  return server.orderbook(base, counter).call();
+  return withHorizonTimeout(server.orderbook(base, counter).call());
+}
+
+/**
+ * Fetch liquidity pools for a reserve asset pair.
+ * @param {StellarSdk.Asset} assetA - The first asset in the liquidity pool
+ * @param {StellarSdk.Asset} assetB - The second asset in the liquidity pool
+ * @returns {Promise<StellarSdk.Horizon.ServerApi.CollectionPage<StellarSdk.Horizon.ServerApi.LiquidityPoolRecord>>} A page of liquidity pool records mapping to the requested pair
+ */
+export async function getLiquidityPools(
+  assetA: StellarSdk.Asset,
+  assetB: StellarSdk.Asset
+): Promise<StellarSdk.Horizon.ServerApi.CollectionPage<StellarSdk.Horizon.ServerApi.LiquidityPoolRecord>> {
+  const server = getHorizonServer();
+  return withHorizonTimeout(
+    server.liquidityPools().forReserves(assetA, assetB).call()
+  );
 }
 
 /**
@@ -65,7 +128,7 @@ export function streamPayments(
     .payments()
     .cursor("now")
     .stream({
-      onmessage: (payment) => {
+      onmessage: (payment: any) => {
         onPayment(payment as StellarSdk.Horizon.ServerApi.PaymentOperationRecord);
       },
     });
