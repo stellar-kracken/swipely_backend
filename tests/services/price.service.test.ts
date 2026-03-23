@@ -62,7 +62,7 @@ describe("PriceService", () => {
                 bids: [{ price: "0.1", amount: "100" }, { price: "0.09", amount: "200" }],
                 asks: [{ price: "0.11", amount: "150" }, { price: "0.12", amount: "50" }],
                 base: {} as any, counter: {} as any
-            });
+            } as any);
 
             const result = await priceService.fetchSDEXPrice("XLM");
 
