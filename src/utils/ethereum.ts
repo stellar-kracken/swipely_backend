@@ -2,13 +2,28 @@ import { ethers } from "ethers";
 import { config } from "../config/index.js";
 import { logger } from "./logger.js";
 
+export class EthereumClientError extends Error {
+  constructor(message: string, public readonly originalError: unknown) {
+    super(message);
+    this.name = "EthereumClientError";
+  }
+}
+
 /**
- * Get an Ethereum JSON-RPC provider.
- * Used for verifying bridge contract state on Ethereum (e.g., USDC supply).
+ * Get an Ethereum JSON-RPC or WebSocket provider.
+ * Used for verifying bridge contract state on Ethereum.
  */
-export function getEthereumProvider(): ethers.JsonRpcProvider | null {
+export function getEthereumProvider(): ethers.Provider | null {
+  if (config.RPC_PROVIDER_TYPE === "ws") {
+    if (!config.ETHEREUM_RPC_WS_URL) {
+      logger.warn("No ETHEREUM_RPC_WS_URL configured for WebSocket provider");
+      return null;
+    }
+    return new ethers.WebSocketProvider(config.ETHEREUM_RPC_WS_URL);
+  }
+
   if (!config.ETHEREUM_RPC_URL) {
-    logger.warn("No ETHEREUM_RPC_URL configured; Ethereum queries disabled");
+    logger.warn("No ETHEREUM_RPC_URL configured; Ethereum queries disabled (HTTP)");
     return null;
   }
   return new ethers.JsonRpcProvider(config.ETHEREUM_RPC_URL);
@@ -41,12 +56,12 @@ export async function getEthereumTokenSupply(
     ]);
 
     return parseFloat(ethers.formatUnits(totalSupply, decimals));
-  } catch (error) {
+  } catch (error: any) {
     logger.error(
-      { error, tokenAddress },
+      { error: error?.message || error, tokenAddress },
       "Failed to fetch Ethereum token supply"
     );
-    throw error;
+    throw new EthereumClientError("Failed to fetching token supply", error);
   }
 }
 
@@ -71,11 +86,11 @@ export async function getEthereumTokenBalance(
     ]);
 
     return parseFloat(ethers.formatUnits(balance, decimals));
-  } catch (error) {
+  } catch (error: any) {
     logger.error(
-      { error, tokenAddress, holderAddress },
+      { error: error?.message || error, tokenAddress, holderAddress },
       "Failed to fetch Ethereum token balance"
     );
-    throw error;
+    throw new EthereumClientError("Failed to fetch token balance", error);
   }
 }

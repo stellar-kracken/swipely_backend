@@ -34,7 +34,7 @@ export const bridgeMonitorWorker = new Worker(
 
       if (!supplyCheck.match) {
         logger.warn(
-          { assetCode, ...supplyCheck },
+          { ...supplyCheck },
           "Bridge supply mismatch detected"
         );
         // TODO: Trigger alert via configured notification channel
