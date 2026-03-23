@@ -1,5 +1,5 @@
-import { getDatabase } from "../connection.js";
-import { logger } from "../../utils/logger.js";
+import { getDatabase } from "./connection.js";
+import { logger } from "../utils/logger.js";
 
 async function migrate() {
   const db = getDatabase();

@@ -112,7 +112,7 @@ export async function getLiquidityPools(
 ): Promise<StellarSdk.Horizon.ServerApi.CollectionPage<StellarSdk.Horizon.ServerApi.LiquidityPoolRecord>> {
   const server = getHorizonServer();
   return withHorizonTimeout(
-    server.liquidityPools().forReserves(assetA, assetB).call()
+    (server.liquidityPools() as any).forReserves(assetA, assetB).call()
   );
 }
 

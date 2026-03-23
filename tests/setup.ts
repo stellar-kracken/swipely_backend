@@ -1,4 +1,17 @@
-import { beforeAll, afterAll } from "vitest";
+import { beforeAll, afterAll, vi } from "vitest";
+
+// Mock ioredis globally to prevent test leaks
+vi.mock("ioredis", () => {
+  return {
+    default: class RedisMock {
+      on = vi.fn();
+      get = vi.fn();
+      set = vi.fn();
+      quit = vi.fn();
+      disconnect = vi.fn();
+    }
+  };
+});
 
 // Global test setup
 beforeAll(async () => {

@@ -25,7 +25,7 @@ export async function buildServer() {
   await server.register(websocket);
 
   // Register routes
-  await registerRoutes(server);
+  await registerRoutes(server as any);
 
   // Health check
   server.get("/health", async () => {
@@ -49,4 +49,6 @@ async function start() {
   }
 }
 
-start();
+if (process.env.NODE_ENV !== "test") {
+  start();
+}
