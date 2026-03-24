@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 // WS /api/v1/ws - WebSocket for real-time updates
 
 export async function websocketRoutes(server: FastifyInstance) {
-  server.get("/", { websocket: true }, (socket, request) => {
+  server.get("/", { websocket: true }, (socket, _request) => {
     server.log.info("WebSocket client connected");
 
     socket.on("message", (message: Buffer) => {

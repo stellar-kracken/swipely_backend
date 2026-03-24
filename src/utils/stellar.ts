@@ -66,7 +66,6 @@ export async function getStellarAssetSupply(
   const server = getHorizonServer();
 
   try {
-    const asset = new StellarSdk.Asset(assetCode, issuer);
     const accounts = await withHorizonTimeout<any>(
       server.assets().forCode(assetCode).forIssuer(issuer).call()
     );

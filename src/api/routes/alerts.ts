@@ -106,7 +106,7 @@ export async function alertsRoutes(server: FastifyInstance) {
   server.get<{
     Params: { assetCode: string };
     Querystring: { limit?: string };
-  }>("/history/:assetCode", async (request, reply) => {
+  }>("/history/:assetCode", async (request, _reply) => {
     const { assetCode } = request.params;
     const limit = parseInt(request.query.limit ?? "50", 10);
     const events = await alertService.getAlertHistory(assetCode, limit);
@@ -116,7 +116,7 @@ export async function alertsRoutes(server: FastifyInstance) {
   // GET /api/v1/alerts/recent
   server.get<{ Querystring: { limit?: string } }>(
     "/recent",
-    async (request, reply) => {
+    async (request, _reply) => {
       const limit = parseInt(request.query.limit ?? "100", 10);
       const events = await alertService.getRecentAlerts(limit);
       return { events };
@@ -127,7 +127,7 @@ export async function alertsRoutes(server: FastifyInstance) {
   server.get<{
     Params: { ruleId: string };
     Querystring: { limit?: string };
-  }>("/rules/:ruleId/events", async (request, reply) => {
+  }>("/rules/:ruleId/events", async (request, _reply) => {
     const { ruleId } = request.params;
     const limit = parseInt(request.query.limit ?? "50", 10);
     const events = await alertService.getAlertsForRule(ruleId, limit);

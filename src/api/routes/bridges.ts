@@ -8,7 +8,7 @@ export async function bridgesRoutes(server: FastifyInstance) {
   const bridgeService = new BridgeService();
 
   // Bridge status overview
-  server.get("/", async (request, reply) => {
+  server.get("/", async (_request, _reply) => {
     const bridges = await bridgeService.getAllBridgeStatuses();
     return bridges;
   });
@@ -16,7 +16,7 @@ export async function bridgesRoutes(server: FastifyInstance) {
   // Bridge-specific statistics
   server.get<{ Params: { bridge: string } }>(
     "/:bridge/stats",
-    async (request, reply) => {
+    async (request, _reply) => {
       const { bridge } = request.params;
       const stats = await bridgeService.getBridgeStats(bridge);
       return stats;
