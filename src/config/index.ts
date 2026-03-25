@@ -32,6 +32,7 @@ const envSchema = z.object({
     .string()
     .url()
     .default("https://soroban-testnet.stellar.org"),
+  LIQUIDITY_CONTRACT_ADDRESS: z.string().optional(),
 
   // Ethereum
   ETHEREUM_RPC_URL: z.string().url().optional(),
