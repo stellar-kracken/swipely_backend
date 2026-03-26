@@ -2,6 +2,7 @@ import * as StellarSdk from "@stellar/stellar-sdk";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 import { getDatabase } from "../database/connection.js";
+import { getCircuitBreakerService, PauseScope } from "./circuitBreaker.service.js";
 
 export interface MerkleProofInput {
   leafHash: string;
@@ -65,6 +66,15 @@ export class ReserveVerificationService {
     merkleRootHex: string,
     totalReserves: bigint
   ): Promise<number> {
+    // Check circuit breaker
+    const circuitBreaker = getCircuitBreakerService();
+    if (circuitBreaker) {
+      const isPaused = await circuitBreaker.isPaused(PauseScope.Bridge, bridgeId);
+      if (isPaused) {
+        throw new Error(`Bridge ${bridgeId} is paused by circuit breaker`);
+      }
+    }
+
     const contractAddress = await this.getContractAddress(bridgeId);
     if (!contractAddress) {
       throw new Error(`No Soroban contract address configured for bridge ${bridgeId}`);
