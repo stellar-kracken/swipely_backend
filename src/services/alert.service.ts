@@ -1,5 +1,6 @@
 import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
+import { circuitBreakerQueue } from "../workers/circuitBreaker.worker.js";
 
 export type AlertType =
   | "price_deviation"
@@ -192,6 +193,11 @@ export class AlertService {
         await this.markRuleTriggered(rule.id, now);
         triggered.push(event);
 
+        // Trigger circuit breaker if configured
+        await this.triggerCircuitBreaker(event, rule).catch((err) =>
+          logger.error({ ruleId: rule.id, err }, "Circuit breaker trigger failed")
+        );
+
         if (rule.webhookUrl) {
           await this.dispatchWebhook(rule.webhookUrl, event, rule).catch(
             (err) =>
@@ -378,6 +384,47 @@ export class AlertService {
         .update({ webhook_attempts: db.raw("webhook_attempts + 1") });
       throw new Error(`Webhook responded ${response.status}`);
     }
+  }
+
+  private async triggerCircuitBreaker(
+    event: AlertEvent,
+    rule: AlertRule
+  ): Promise<void> {
+    // Map alert types to circuit breaker trigger data
+    const severity = event.priority === "critical" ? "high" :
+                    event.priority === "high" ? "medium" : "low";
+
+    const triggerData = {
+      alertId: `${event.ruleId}-${event.time.getTime()}`,
+      alertType: event.alertType.replace(/_/g, "_"), // Convert to snake_case
+      assetCode: event.assetCode,
+      severity,
+      value: event.triggeredValue,
+      threshold: event.threshold,
+    };
+
+    // Add bridge ID for bridge-related alerts
+    if (event.alertType.includes("supply") || event.alertType.includes("bridge")) {
+      // For bridge alerts, we might need to derive bridge ID from asset or rule
+      // This is a simplified version - in production, you'd have bridge mapping
+      triggerData.bridgeId = `bridge-${event.assetCode}`;
+    }
+
+    await circuitBreakerQueue.add("circuit-breaker-trigger", triggerData, {
+      priority: event.priority === "critical" ? 1 : 2,
+      delay: 0, // Process immediately
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 5000,
+      },
+    });
+
+    logger.info({
+      alertId: triggerData.alertId,
+      alertType: event.alertType,
+      severity
+    }, "Circuit breaker trigger queued");
   }
 
   private mapRule(row: Record<string, unknown>): AlertRule {
