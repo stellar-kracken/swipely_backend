@@ -44,7 +44,7 @@ export async function alertsRoutes(server: FastifyInstance) {
     async (request: FastifyRequest<{ Body: any }>, reply: FastifyReply) => {
       const data = CreateAlertRuleSchema.parse(request.body);
       const { ownerAddress } = request.body as any;
-      
+
       if (!ownerAddress) {
         return reply.status(400).send({ error: "ownerAddress required" });
       }
@@ -70,7 +70,7 @@ export async function alertsRoutes(server: FastifyInstance) {
     async (request: FastifyRequest<{ Body: any }>, reply: FastifyReply) => {
       const { rules } = BulkCreateAlertRulesSchema.parse(request.body);
       const { ownerAddress } = request.body as any;
-      
+
       if (!ownerAddress) {
         return reply.status(400).send({ error: "ownerAddress required" });
       }
@@ -80,7 +80,7 @@ export async function alertsRoutes(server: FastifyInstance) {
     }
   );
 
-  // GET /api/v1/alerts/rules/:ruleId
+  // GET  /api/v1/alerts/rules/:ruleId
   server.get<{ Params: { ruleId: string } }>(
     "/rules/:ruleId",
     async (request, reply) => {
@@ -133,7 +133,7 @@ export async function alertsRoutes(server: FastifyInstance) {
     async (request, reply) => {
       const { ruleId } = request.params;
       const { ownerAddress } = request.body as any;
-      
+
       if (!ownerAddress) {
         return reply.status(400).send({ error: "ownerAddress required" });
       }
@@ -167,7 +167,7 @@ export async function alertsRoutes(server: FastifyInstance) {
   }>("/rules/:ruleId/active", async (request, reply) => {
     const { ruleId } = request.params;
     const { ownerAddress, isActive } = request.body;
-    
+
     if (!ownerAddress) {
       return reply.status(400).send({ error: "ownerAddress required" });
     }
@@ -181,7 +181,7 @@ export async function alertsRoutes(server: FastifyInstance) {
   server.get("/history", async (request: FastifyRequest<{ Querystring: any }>) => {
     const query = AlertHistoryQuerySchema.parse(request.query);
     const { limit, offset, page } = getPaginationParams(query);
-    
+
     const events = await alertService.getRecentAlerts(limit);
     const total = events.length;
 
