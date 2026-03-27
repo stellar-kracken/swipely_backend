@@ -32,6 +32,7 @@ const envSchema = z.object({
     .string()
     .url()
     .default("https://soroban-testnet.stellar.org"),
+  SOROBAN_MAINNET_RPC_URL: z.string().url().optional(),
   CIRCUIT_BREAKER_CONTRACT_ID: z.string().optional(),
   LIQUIDITY_CONTRACT_ADDRESS: z.string().optional(),
 
