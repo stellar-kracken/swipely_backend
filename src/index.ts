@@ -9,6 +9,8 @@ import {
   registerRateLimiting,
   getRateLimitMetrics,
 } from "./api/middleware/rateLimit.middleware.js";
+import { initJobSystem } from "./workers/index.js";
+import { JobQueue } from "./workers/queue.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -52,7 +54,18 @@ async function start() {
     );
 
     // Initialize background jobs
-    startBridgeVerificationJob();
+    await initJobSystem();
+
+    // Graceful shutdown
+    const shutdown = async () => {
+      logger.info("Closing server...");
+      await server.close();
+      await JobQueue.getInstance().stop();
+      process.exit(0);
+    };
+
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
   } catch (err) {
     server.log.error(err);
     process.exit(1);
