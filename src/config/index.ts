@@ -69,6 +69,13 @@ const envSchema = z.object({
   // Price Aggregation
   HORIZON_TIMEOUT_MS: z.coerce.number().default(500),
   REDIS_CACHE_TTL_SEC: z.coerce.number().default(30),
+
+  // Health Score Weights
+  HEALTH_WEIGHT_LIQUIDITY: z.coerce.number().default(0.25),
+  HEALTH_WEIGHT_PRICE: z.coerce.number().default(0.25),
+  HEALTH_WEIGHT_BRIDGE: z.coerce.number().default(0.20),
+  HEALTH_WEIGHT_RESERVES: z.coerce.number().default(0.20),
+  HEALTH_WEIGHT_VOLUME: z.coerce.number().default(0.10),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
