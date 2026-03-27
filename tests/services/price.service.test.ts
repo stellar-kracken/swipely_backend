@@ -28,7 +28,12 @@ vi.mock("../../src/utils/stellar.js", () => ({
 }));
 
 vi.mock("../../src/config/index.js", () => ({
-    config: { REDIS_CACHE_TTL_SEC: 30, LOG_LEVEL: "info" },
+    config: {
+        REDIS_CACHE_TTL_SEC: 30,
+        REDIS_PRICE_CACHE_PREFIX: "price:aggregated",
+        PRICE_DEVIATION_THRESHOLD: 0.02,
+        LOG_LEVEL: "info"
+    },
     SUPPORTED_ASSETS: [
         { code: "USDC", issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN" },
         { code: "PYUSD", issuer: "GBHZAE5IQTOPQZ66TFWZYIYCHQ6T3GMWHDKFEXAKYWJ2BHLZQ227KRYE" },
@@ -83,6 +88,20 @@ describe("PriceService", () => {
             await expect(priceService.fetchSDEXPrice("XLM")).rejects.toThrow(HorizonTimeoutError);
         });
 
+        it("throws PriceFetchError for unsupported assets", async () => {
+            await expect(priceService.fetchSDEXPrice("INVALID")).rejects.toThrow(PriceFetchError);
+        });
+
+        it("throws PriceFetchError when orderbook is empty", async () => {
+            vi.mocked(getOrderBook).mockResolvedValue({
+                bids: [],
+                asks: [],
+                base: {} as any,
+                counter: {} as any
+            } as any);
+            await expect(priceService.fetchSDEXPrice("XLM")).rejects.toThrow(PriceFetchError);
+        });
+
         it("handles generic errors by wrapping in PriceFetchError", async () => {
             vi.mocked(getOrderBook).mockRejectedValue(new Error("Network failed"));
             await expect(priceService.fetchSDEXPrice("XLM")).rejects.toThrow(PriceFetchError);
@@ -101,7 +120,7 @@ describe("PriceService", () => {
                     {
                         reserves: [
                             { asset: "native", amount: "1000" },
-                            { asset: "USDC:USDC_ISSUER", amount: "100" }
+                            { asset: "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", amount: "100" }
                         ]
                     }
                 ]
@@ -112,6 +131,20 @@ describe("PriceService", () => {
             // vol = 100 * 2 = 200
             expect(result.price).toBeCloseTo(0.1);
             expect(result.volume).toBe(200);
+        });
+
+        it("throws PriceFetchError for unsupported assets", async () => {
+            await expect(priceService.fetchAMMPrice("INVALID")).rejects.toThrow(PriceFetchError);
+        });
+
+        it("rethrows HorizonClientError", async () => {
+            vi.mocked(getLiquidityPools).mockRejectedValue(new HorizonClientError("horizon down", new Error("horizon down")));
+            await expect(priceService.fetchAMMPrice("XLM")).rejects.toThrow(HorizonClientError);
+        });
+
+        it("throws PriceFetchError when pools are missing", async () => {
+            vi.mocked(getLiquidityPools).mockResolvedValue({ records: [] } as any);
+            await expect(priceService.fetchAMMPrice("XLM")).rejects.toThrow(PriceFetchError);
         });
     });
 
@@ -153,7 +186,7 @@ describe("PriceService", () => {
         });
 
         it("returns cached result if available", async () => {
-            vi.mocked(redis.get).mockResolvedValue(JSON.stringify({ vwap: 999 }));
+            vi.mocked(redis.get).mockResolvedValue(JSON.stringify({ symbol: "XLM", vwap: 999 }));
             const result = await priceService.getAggregatedPrice("XLM");
             expect(result?.vwap).toBe(999);
             expect(priceService.fetchSDEXPrice).not.toHaveBeenCalled();
@@ -163,9 +196,15 @@ describe("PriceService", () => {
             vi.mocked(redis.get).mockResolvedValue(null);
             const result = await priceService.getAggregatedPrice("XLM");
             expect(result?.vwap).toBeCloseTo(0.113333);
+            expect(result?.deviation).toBeGreaterThan(0);
             expect(priceService.fetchSDEXPrice).toHaveBeenCalledWith("XLM");
             expect(priceService.fetchAMMPrice).toHaveBeenCalledWith("XLM");
-            expect(redis.set).toHaveBeenCalled();
+            expect(redis.set).toHaveBeenCalledWith(
+                "price:aggregated:XLM",
+                expect.any(String),
+                "EX",
+                30
+            );
         });
 
         it("gracefully calculates from SDEX if AMM fails", async () => {
@@ -206,6 +245,56 @@ describe("PriceService", () => {
                 const result = await priceService.getAggregatedPrice(asset);
                 expect(result?.symbol).toBe(asset);
             }
+        });
+
+        it("normalizes symbol casing", async () => {
+            vi.mocked(redis.get).mockResolvedValue(null);
+            const result = await priceService.getAggregatedPrice("xlm");
+            expect(result?.symbol).toBe("XLM");
+            expect(priceService.fetchSDEXPrice).toHaveBeenCalledWith("XLM");
+        });
+
+        it("does not fail when cache read fails", async () => {
+            vi.mocked(redis.get).mockRejectedValue(new Error("redis read down"));
+            const result = await priceService.getAggregatedPrice("XLM");
+            expect(result?.symbol).toBe("XLM");
+        });
+    });
+
+    describe("getPriceFromSource", () => {
+        it("returns SDEX source price", async () => {
+            vi.spyOn(priceService, "fetchSDEXPrice").mockResolvedValue({ price: 0.1, volume: 100 });
+            const source = await priceService.getPriceFromSource("XLM", "sdex");
+            expect(source?.source).toBe("SDEX");
+            expect(source?.price).toBe(0.1);
+        });
+
+        it("returns null for unknown source", async () => {
+            const source = await priceService.getPriceFromSource("XLM", "coinbase");
+            expect(source).toBeNull();
+        });
+    });
+
+    describe("checkDeviation", () => {
+        it("returns deviated=true when threshold is exceeded", async () => {
+            vi.spyOn(priceService, "getAggregatedPrice").mockResolvedValue({
+                symbol: "XLM",
+                vwap: 1,
+                sources: [
+                    { source: "SDEX", price: 1, timestamp: new Date().toISOString() },
+                    { source: "AMM", price: 1.1, timestamp: new Date().toISOString() }
+                ],
+                deviation: 0.1,
+                lastUpdated: new Date().toISOString()
+            });
+            const result = await priceService.checkDeviation("XLM");
+            expect(result).toEqual({ deviated: true, percentage: 0.1 });
+        });
+
+        it("returns deviated=false for null aggregated price", async () => {
+            vi.spyOn(priceService, "getAggregatedPrice").mockResolvedValue(null);
+            const result = await priceService.checkDeviation("XLM");
+            expect(result).toEqual({ deviated: false, percentage: 0 });
         });
     });
 });
