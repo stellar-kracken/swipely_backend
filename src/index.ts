@@ -1,11 +1,14 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
+import {
+  registerRateLimiting,
+  getRateLimitMetrics,
+} from "./api/middleware/rateLimit.middleware.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -18,10 +21,8 @@ export async function buildServer() {
     credentials: true,
   });
 
-  await server.register(rateLimit, {
-    max: config.RATE_LIMIT_MAX,
-    timeWindow: config.RATE_LIMIT_WINDOW_MS,
-  });
+  // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
+  await registerRateLimiting(server);
 
   await server.register(websocket);
 
@@ -31,6 +32,11 @@ export async function buildServer() {
   // Health check
   server.get("/health", async () => {
     return { status: "ok", timestamp: new Date().toISOString() };
+  });
+
+  // Rate-limit metrics (internal monitoring endpoint)
+  server.get("/api/v1/metrics/rate-limits", async () => {
+    return { metrics: getRateLimitMetrics(), timestamp: new Date().toISOString() };
   });
 
   return server;
