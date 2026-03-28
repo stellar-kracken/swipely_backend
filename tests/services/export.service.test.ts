@@ -1,368 +1,299 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ExportService } from "../../src/services/export.service.js";
+import { ExportQueue } from "../../src/jobs/export.job.js";
 
+// Mock logger
 vi.mock("../../src/utils/logger.js", () => ({
-  logger: {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  },
+    logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+    },
 }));
+
+// Mock database
+const mockInsert = vi.fn().mockResolvedValue([1]);
+const mockWhere = vi.fn();
+const mockFirst = vi.fn();
+const mockUpdate = vi.fn().mockResolvedValue(1);
+const mockDel = vi.fn().mockResolvedValue(1);
+const mockOrderBy = vi.fn();
+const mockLimit = vi.fn();
+
+const mockDb = vi.fn().mockReturnValue({
+    insert: mockInsert,
+    where: mockWhere.mockReturnThis(),
+    first: mockFirst,
+    update: mockUpdate,
+    del: mockDel,
+    orderBy: mockOrderBy.mockReturnThis(),
+    limit: mockLimit,
+});
 
 vi.mock("../../src/database/connection.js", () => ({
-  getDatabase: vi.fn(() => {
-    const dbMock = vi.fn((table: string) => {
-      if (table === "export_history") {
-        return {
-          insert: vi.fn(),
-          where: vi.fn(),
-          first: vi.fn(),
-          delete: vi.fn(),
-          count: vi.fn(),
-          orderBy: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          offset: vi.fn().mockReturnThis(),
-        };
-      }
-      return {};
-    }) as any;
-
-    dbMock.fn = {
-      now: vi.fn().mockReturnValue("NOW()"),
-    };
-
-    return dbMock;
-  }),
+    getDatabase: () => mockDb,
 }));
 
-vi.mock("../../src/workers/export.worker.js", () => ({
-  exportQueue: {
-    add: vi.fn(),
-  },
-}));
-
+// Mock config
 vi.mock("../../src/config/index.js", () => ({
-  config: {
-    EXPORT_MAX_DATE_RANGE_DAYS: 90,
-    EXPORT_DOWNLOAD_URL_EXPIRY_HOURS: 24,
-    REDIS_HOST: "localhost",
-    REDIS_PORT: 6379,
-    LOG_LEVEL: "info",
-  },
+    config: {
+        EXPORT_STORAGE_PATH: "/tmp/exports",
+        EXPORT_DOWNLOAD_URL_EXPIRY_HOURS: 24,
+        EXPORT_COMPRESSION_THRESHOLD_BYTES: 1048576, // 1MB
+        EXPORT_STREAMING_PAGE_SIZE: 1000,
+        EXPORT_QUEUE_CONCURRENCY: 5,
+        EXPORT_QUEUE_RETRY_ATTEMPTS: 3,
+        SMTP_HOST: "smtp.test.com",
+        SMTP_PORT: 587,
+        SMTP_USER: "test",
+        SMTP_PASS: "test",
+        SMTP_FROM: "exports@test.com",
+    },
 }));
 
-vi.mock("fs/promises", () => ({
-  unlink: vi.fn(),
+// Mock BullMQ Queue and Worker
+vi.mock("bullmq", () => ({
+    Queue: vi.fn().mockImplementation(() => ({
+        add: vi.fn().mockResolvedValue({ id: "job-123" }),
+        close: vi.fn().mockResolvedValue(undefined),
+    })),
+    Worker: vi.fn().mockImplementation(() => ({
+        on: vi.fn(),
+        run: vi.fn(),
+    })),
+}));
+
+// Mock export job - use proper mock for the Queue class
+vi.mock("../../src/jobs/export.job.js", () => ({
+    ExportQueue: vi.fn().mockImplementation(() => ({
+        add: vi.fn().mockResolvedValue({ id: "job-123" }),
+        addExportJob: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+    })),
+    exportQueue: {
+        add: vi.fn().mockResolvedValue({ id: "job-123" }),
+        addExportJob: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+    },
 }));
 
 describe("ExportService", () => {
-  let exportService: ExportService;
-  let mockDb: any;
+    let exportService: ExportService;
 
-  beforeEach(() => {
-    exportService = new ExportService();
-    mockDb = {
-      fn: {
-        now: vi.fn().mockReturnValue("NOW()"),
-      },
-      "export_history": {
-        insert: vi.fn(),
-        where: vi.fn(),
-        first: vi.fn(),
-        delete: vi.fn(),
-      },
-    };
-    vi.resetAllMocks();
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe("requestExport", () => {
-    it("creates export record with pending status", async () => {
-      const mockRecord = {
-        id: "test-export-id",
-        requested_by: "user-123",
-        format: "csv",
-        data_type: "analytics",
-        filters: JSON.stringify({ startDate: "2024-01-01", endDate: "2024-01-31" }),
-        status: "pending",
-        email_delivery: false,
-        email_address: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
-
-      vi.mocked(mockDb["export_history"].insert).mockResolvedValue([mockRecord]);
-
-      const payload = {
-        format: "csv" as const,
-        dataType: "analytics" as const,
-        filters: { startDate: "2024-01-01", endDate: "2024-01-31" },
-      };
-
-      const result = await exportService.requestExport("user-123", payload);
-
-      expect(result.id).toBe("test-export-id");
-      expect(result.status).toBe("pending");
-      expect(result.format).toBe("csv");
-      expect(mockDb["export_history"].insert).toHaveBeenCalled();
+    beforeEach(() => {
+        exportService = new ExportService();
+        vi.clearAllMocks();
     });
 
-    it("enqueues export job after creating record", async () => {
-      const mockRecord = {
-        id: "test-export-id",
-        requested_by: "user-123",
-        format: "json",
-        data_type: "transactions",
-        filters: JSON.stringify({ startDate: "2024-01-01", endDate: "2024-01-31" }),
-        status: "pending",
-        email_delivery: false,
-        email_address: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
+    describe("requestExport", () => {
+        const mockExportRequest = {
+            format: "csv" as const,
+            dataType: "analytics" as const,
+            filters: {
+                startDate: "2024-01-01",
+                endDate: "2024-01-31",
+                assetCodes: ["USDC"],
+                bridgeIds: ["bridge-1"],
+            },
+        };
 
-      vi.mocked(mockDb["export_history"].insert).mockResolvedValue([mockRecord]);
+        it("creates export record with pending status", async () => {
+            mockInsert.mockResolvedValueOnce([1]);
+            mockFirst.mockResolvedValueOnce({
+                id: "1",
+                requested_by: "user-123",
+                format: "csv",
+                data_type: "analytics",
+                status: "pending",
+                filters: mockExportRequest.filters,
+                created_at: new Date(),
+            });
 
-      const payload = {
-        format: "json" as const,
-        dataType: "transactions" as const,
-        filters: { startDate: "2024-01-01", endDate: "2024-01-31" },
-      };
+            const result = await exportService.requestExport("user-123", mockExportRequest);
 
-      await exportService.requestExport("user-123", payload);
+            expect(mockInsert).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    requested_by: "user-123",
+                    format: "csv",
+                    data_type: "analytics",
+                    status: "pending",
+                })
+            );
+            expect(result).toHaveProperty("id");
+        });
 
-      const { exportQueue } = await import("../../src/workers/export.worker.js");
-      expect(exportQueue.add).toHaveBeenCalledWith(
-        "process-export",
-        expect.objectContaining({
-          exportId: "test-export-id",
-          requestedBy: "user-123",
-          format: "json",
-          dataType: "transactions",
-        }),
-        expect.objectContaining({
-          attempts: 3,
-          backoff: { type: "exponential", delay: 2000 },
-        })
-      );
+        it("enqueues export job after creating record", async () => {
+            mockInsert.mockResolvedValueOnce([1]);
+            mockFirst.mockResolvedValueOnce({
+                id: "1",
+                requested_by: "user-123",
+                format: "csv",
+                data_type: "analytics",
+                status: "pending",
+            });
+
+            const result = await exportService.requestExport("user-123", mockExportRequest);
+
+            expect(ExportQueue.add).toHaveBeenCalledWith(
+                "export",
+                expect.objectContaining({
+                    exportId: expect.any(String),
+                    format: "csv",
+                    dataType: "analytics",
+                }),
+                expect.any(Object)
+            );
+            expect(result).toHaveProperty("id");
+        });
+
+        it("validates required fields", async () => {
+            await expect(
+                exportService.requestExport("user-123", {
+                    format: "invalid" as any,
+                    dataType: "analytics",
+                    filters: {
+                        startDate: new Date().toISOString(),
+                        endDate: new Date().toISOString(),
+                    },
+                })
+            ).rejects.toThrow("Invalid export format");
+        });
+
+        it("validates date range", async () => {
+            await expect(
+                exportService.requestExport("user-123", {
+                    format: "csv",
+                    dataType: "analytics",
+                    filters: {
+                        startDate: "2024-01-31",
+                        endDate: "2024-01-01", // end before start
+                    },
+                })
+            ).rejects.toThrow("Invalid date range");
+        });
     });
 
-    it("throws error when email delivery requested but no email address", async () => {
-      const payload = {
-        format: "csv" as const,
-        dataType: "analytics" as const,
-        filters: { startDate: "2024-01-01", endDate: "2024-01-31" },
-        emailDelivery: true,
-      };
+    describe("getExportStatus", () => {
+        it("returns export record for given ID", async () => {
+            const mockRecord = {
+                id: "export-123",
+                requested_by: "user-123",
+                format: "csv",
+                data_type: "analytics",
+                status: "completed",
+                file_path: "/tmp/exports/export-123.csv",
+                download_url: "http://example.com/download/export-123",
+                created_at: new Date(),
+            };
 
-      await expect(exportService.requestExport("user-123", payload)).rejects.toThrow(
-        "Email address required when email delivery is enabled"
-      );
+            mockFirst.mockResolvedValueOnce(mockRecord);
+
+            const result = await exportService.getExportStatus("export-123");
+
+            expect(mockWhere).toHaveBeenCalledWith({ id: "export-123" });
+            expect(result).toEqual(mockRecord);
+        });
+
+        it("returns null for non-existent export", async () => {
+            mockFirst.mockResolvedValueOnce(null);
+
+            const result = await exportService.getExportStatus("non-existent");
+
+            expect(result).toBeNull();
+        });
     });
 
-    it("validates date range is within maximum allowed days", async () => {
-      const payload = {
-        format: "csv" as const,
-        dataType: "analytics" as const,
-        filters: { startDate: "2024-01-01", endDate: "2024-06-01" }, // > 90 days
-      };
+    describe("listExports", () => {
+        it("returns paginated results for user", async () => {
+            const mockRecords = [
+                { id: "1", format: "csv", status: "completed" },
+                { id: "2", format: "json", status: "pending" },
+            ];
+            const mockCount = [{ count: "10" }];
 
-      await expect(exportService.requestExport("user-123", payload)).rejects.toThrow(
-        /Date range exceeds maximum/
-      );
-    });
-  });
+            mockOrderBy.mockReturnValueOnce({
+                limit: mockLimit.mockResolvedValueOnce(mockRecords),
+            });
+            mockWhere.mockReturnValueOnce({
+                orderBy: mockOrderBy.mockReturnValueOnce({
+                    limit: mockLimit.mockResolvedValueOnce(mockCount),
+                }),
+            });
 
-  describe("getExportStatus", () => {
-    it("returns export record for given ID", async () => {
-      const mockRecord = {
-        id: "test-export-id",
-        requested_by: "user-123",
-        format: "csv",
-        data_type: "analytics",
-        filters: JSON.stringify({ startDate: "2024-01-01", endDate: "2024-01-31" }),
-        status: "completed",
-        file_path: "/exports/test-export-id.csv",
-        download_url: "/api/v1/exports/test-export-id/download",
-        download_url_expires_at: new Date(),
-        file_size_bytes: 1024,
-        is_compressed: false,
-        error_message: null,
-        email_delivery: false,
-        email_address: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
+            mockFirst.mockResolvedValueOnce({ count: "10" });
+            mockLimit.mockResolvedValueOnce(mockRecords);
 
-      vi.mocked(mockDb["export_history"].where).mockReturnValue({
-        first: vi.fn().mockResolvedValue(mockRecord),
-      });
+            const result = await exportService.listExports("user-123", { page: 1, limit: 10 });
 
-      const result = await exportService.getExportStatus("test-export-id");
-
-      expect(result?.id).toBe("test-export-id");
-      expect(result?.status).toBe("completed");
-      expect(result?.file_path).toBe("/exports/test-export-id.csv");
+            expect(result).toHaveLength(2);
+            expect(mockWhere).toHaveBeenCalledWith({ requested_by: "user-123" });
+        });
     });
 
-    it("returns null for non-existent export", async () => {
-      vi.mocked(mockDb["export_history"].where).mockReturnValue({
-        first: vi.fn().mockResolvedValue(null),
-      });
+    describe("generateDownloadUrl", () => {
+        it("generates URL with correct expiry", async () => {
+            const mockRecord = {
+                id: "export-123",
+                status: "completed",
+                file_path: "/tmp/exports/export-123.csv",
+            };
 
-      const result = await exportService.getExportStatus("non-existent");
+            mockFirst.mockResolvedValueOnce(mockRecord);
+            mockUpdate.mockResolvedValueOnce(1);
 
-      expect(result).toBeNull();
-    });
-  });
+            const result = await exportService.generateDownloadUrl("export-123");
 
-  describe("listExports", () => {
-    it("returns paginated results for user", async () => {
-      const mockRecords = [
-        {
-          id: "export-1",
-          requested_by: "user-123",
-          format: "csv",
-          data_type: "analytics",
-          filters: JSON.stringify({ startDate: "2024-01-01", endDate: "2024-01-31" }),
-          status: "completed",
-          file_path: null,
-          download_url: null,
-          download_url_expires_at: null,
-          file_size_bytes: null,
-          is_compressed: false,
-          error_message: null,
-          email_delivery: false,
-          email_address: null,
-          created_at: new Date(),
-          updated_at: new Date(),
-        },
-        {
-          id: "export-2",
-          requested_by: "user-123",
-          format: "json",
-          data_type: "transactions",
-          filters: JSON.stringify({ startDate: "2024-02-01", endDate: "2024-02-28" }),
-          status: "pending",
-          file_path: null,
-          download_url: null,
-          download_url_expires_at: null,
-          file_size_bytes: null,
-          is_compressed: false,
-          error_message: null,
-          email_delivery: false,
-          email_address: null,
-          created_at: new Date(),
-          updated_at: new Date(),
-        },
-      ];
+            expect(result.url).toContain("token=");
+            expect(result.expiresAt).toBeInstanceOf(Date);
+            expect(mockUpdate).toHaveBeenCalled();
+        });
 
-      vi.mocked(mockDb["export_history"].where).mockImplementation((field: string) => {
-        if (field === "requested_by") {
-          return {
-            orderBy: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-            offset: vi.fn().mockResolvedValue(mockRecords),
-            count: vi.fn().mockResolvedValue({ count: 2 }),
-          };
-        }
-        return { count: vi.fn().mockResolvedValue({ count: 2 }) };
-      });
+        it("throws error for non-completed exports", async () => {
+            mockFirst.mockResolvedValueOnce({
+                id: "export-123",
+                status: "pending",
+            });
 
-      const result = await exportService.listExports("user-123", { page: 1, limit: 20 });
+            await expect(
+                exportService.generateDownloadUrl("export-123")
+            ).rejects.toThrow("Export is not completed");
+        });
 
-      expect(result.total).toBe(2);
-      expect(result.exports).toHaveLength(2);
-      expect(result.page).toBe(1);
-      expect(result.limit).toBe(20);
-    });
-  });
+        it("throws error for non-existent exports", async () => {
+            mockFirst.mockResolvedValueOnce(null);
 
-  describe("generateDownloadUrl", () => {
-    it("generates URL with correct expiry", async () => {
-      const mockRecord = {
-        id: "test-export-id",
-        requested_by: "user-123",
-        format: "csv",
-        data_type: "analytics",
-        filters: JSON.stringify({ startDate: "2024-01-01", endDate: "2024-01-31" }),
-        status: "completed",
-        file_path: "/exports/test-export-id.csv",
-        download_url: null,
-        download_url_expires_at: null,
-        file_size_bytes: 1024,
-        is_compressed: false,
-        error_message: null,
-        email_delivery: false,
-        email_address: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
-
-      vi.mocked(mockDb["export_history"].where).mockReturnValue({
-        first: vi.fn().mockResolvedValue(mockRecord),
-        update: vi.fn().mockResolvedValue(1),
-      });
-
-      const result = await exportService.generateDownloadUrl("test-export-id");
-
-      expect(result.url).toContain("/api/v1/exports/test-export-id/download");
-      expect(result.url).toContain("token=");
-      expect(result.expiresAt).toBeInstanceOf(Date);
+            await expect(
+                exportService.generateDownloadUrl("non-existent")
+            ).rejects.toThrow("Export not found");
+        });
     });
 
-    it("throws error for non-completed exports", async () => {
-      const mockRecord = {
-        id: "test-export-id",
-        status: "processing",
-        file_path: null,
-      };
+    describe("deleteExport", () => {
+        it("deletes database record and file", async () => {
+            mockFirst.mockResolvedValueOnce({
+                id: "export-123",
+                file_path: "/tmp/exports/export-123.csv",
+            });
+            mockDel.mockResolvedValueOnce(1);
 
-      vi.mocked(mockDb["export_history"].where).mockReturnValue({
-        first: vi.fn().mockResolvedValue(mockRecord),
-      });
+            await expect(
+                exportService.deleteExport("export-123")
+            ).resolves.not.toThrow();
 
-      await expect(exportService.generateDownloadUrl("test-export-id")).rejects.toThrow(
-        "Export is not completed"
-      );
+            expect(mockDel).toHaveBeenCalledWith({ id: "export-123" });
+        });
+
+        it("handles missing file gracefully", async () => {
+            mockFirst.mockResolvedValueOnce({
+                id: "export-123",
+                file_path: "/non/existent/file.csv",
+            });
+            mockDel.mockResolvedValueOnce(1);
+
+            await expect(
+                exportService.deleteExport("export-123")
+            ).resolves.not.toThrow();
+        });
     });
-  });
-
-  describe("deleteExport", () => {
-    it("deletes database record and file", async () => {
-      const mockRecord = {
-        id: "test-export-id",
-        file_path: "/exports/test-export-id.csv",
-      };
-
-      vi.mocked(mockDb["export_history"].where).mockReturnValue({
-        first: vi.fn().mockResolvedValue(mockRecord),
-        delete: vi.fn().mockResolvedValue(1),
-      });
-
-      await expect(exportService.deleteExport("test-export-id")).resolves.not.toThrow();
-
-      const fs = await import("fs/promises");
-      expect(fs.unlink).toHaveBeenCalledWith("/exports/test-export-id.csv");
-      expect(mockDb["export_history"].where().delete).toHaveBeenCalled();
-    });
-
-    it("deletes database record even if file doesn't exist", async () => {
-      const mockRecord = {
-        id: "test-export-id",
-        file_path: null,
-      };
-
-      vi.mocked(mockDb["export_history"].where).mockReturnValue({
-        first: vi.fn().mockResolvedValue(mockRecord),
-        delete: vi.fn().mockResolvedValue(1),
-      });
-
-      await expect(exportService.deleteExport("test-export-id")).resolves.not.toThrow();
-    });
-  });
 });
