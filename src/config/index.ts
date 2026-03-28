@@ -67,6 +67,23 @@ const envSchema = z.object({
   // Price Aggregation
   HORIZON_TIMEOUT_MS: z.coerce.number().default(500),
   REDIS_CACHE_TTL_SEC: z.coerce.number().default(30),
+
+  // Export Service
+  EXPORT_STORAGE_PATH: z.string().default("./exports"),
+  EXPORT_DOWNLOAD_URL_EXPIRY_HOURS: z.coerce.number().default(24),
+  EXPORT_COMPRESSION_THRESHOLD_BYTES: z.coerce.number().default(1048576), // 1MB
+  EXPORT_STREAMING_PAGE_SIZE: z.coerce.number().default(1000),
+  EXPORT_QUEUE_CONCURRENCY: z.coerce.number().default(3),
+  EXPORT_MAX_DATE_RANGE_DAYS: z.coerce.number().default(90),
+
+  // Email Configuration
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  SMTP_FROM_ADDRESS: z.string().default("noreply@bridgewatch.io"),
+  SMTP_FROM_NAME: z.string().default("Bridge Watch"),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
