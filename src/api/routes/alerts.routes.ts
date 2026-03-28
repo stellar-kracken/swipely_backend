@@ -55,7 +55,6 @@ export async function alertsRoutes(server: FastifyInstance) {
         data.cooldownSeconds,
         data.webhookUrl
       );
-
       return reply.status(201).send({ rule });
     }
   );
