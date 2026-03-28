@@ -31,11 +31,6 @@ export async function buildServer() {
   // Register routes
   await registerRoutes(server as any);
 
-  // Health check
-  server.get("/health", async () => {
-    return { status: "ok", timestamp: new Date().toISOString() };
-  });
-
   // Rate-limit metrics (internal monitoring endpoint)
   server.get("/api/v1/metrics/rate-limits", async () => {
     return { metrics: getRateLimitMetrics(), timestamp: new Date().toISOString() };
