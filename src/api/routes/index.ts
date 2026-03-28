@@ -5,6 +5,9 @@ import { websocketRoutes } from "./websocket.js";
 import { alertsRoutes } from "./alerts.js";
 import { circuitBreakerRoutes } from "./circuitBreaker.js";
 import jobsRoutes from "./jobs.js";
+import { configRoutes } from "./config.js";
+import { aggregationRoutes } from "./aggregation.js";
+import { metadataRoutes } from "./metadata.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -13,4 +16,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(alertsRoutes, { prefix: "/api/v1/alerts" });
   server.register(circuitBreakerRoutes, { prefix: "/api/v1/circuit-breaker" });
   server.register(jobsRoutes, { prefix: "/api/v1/jobs" });
+  server.register(configRoutes, { prefix: "/api/v1/config" });
+  server.register(aggregationRoutes, { prefix: "/api/v1/aggregation" });
+  server.register(metadataRoutes, { prefix: "/api/v1/metadata" });
 }
