@@ -1,0 +1,361 @@
+openapi: 3.0.0
+info:
+  title: Bridge-Watch Alert Management API
+  description: API for managing user alert rules and history for Stellar bridge monitoring.
+  version: 1.0.0
+servers:
+  - url: /api/v1/alerts
+    description: Base URL for alerts API
+
+paths:
+  /rules:
+    get:
+      summary: List all alert rules for an owner
+      parameters:
+        - name: owner
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of alert rules
+    post:
+      summary: Create a new alert rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAlertRule'
+      responses:
+        '201':
+          description: Alert rule created
+
+  /rules/bulk:
+    post:
+      summary: Bulk create alert rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ownerAddress:
+                  type: string
+                rules:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/CreateAlertRule'
+      responses:
+        '201':
+          description: Alert rules created
+    patch:
+      summary: Bulk update alert rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ownerAddress:
+                  type: string
+                updates:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/UpdateAlertRule'
+      responses:
+        '200':
+          description: Alert rules updated
+    delete:
+      summary: Bulk delete alert rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ownerAddress:
+                  type: string
+                ruleIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Number of rules deleted
+
+  /rules/{ruleId}:
+    parameters:
+      - name: ruleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get an alert rule by ID
+      responses:
+        '200':
+          description: Alert rule details
+    patch:
+      summary: Update an alert rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAlertRule'
+      responses:
+        '200':
+          description: Alert rule updated
+    delete:
+      summary: Delete an alert rule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ownerAddress:
+                  type: string
+      responses:
+        '204':
+          description: Alert rule deleted
+
+  /rules/{ruleId}/active:
+    patch:
+      summary: Pause or resume an alert rule (toggle active status)
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ownerAddress:
+                  type: string
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: Success status
+
+  /history:
+    get:
+      summary: Query alert history with filtering and pagination
+      parameters:
+        - name: assetCode
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Paginated alert history
+
+  /history/{assetCode}:
+    get:
+      summary: Get alert history for a specific asset
+      parameters:
+        - name: assetCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: List of alert events for the asset
+
+  /recent:
+    get:
+      summary: Get most recent alerts across all assets
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: List of recent alert events
+
+  /rules/{ruleId}/events:
+    get:
+      summary: Get history of events triggered by a specific rule
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: List of alert events for the rule
+
+  /stats:
+    get:
+      summary: Get alert statistics for an owner
+      parameters:
+        - name: owner
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert statistics summary
+
+  /test:
+    post:
+      summary: Dry run an alert rule against provided metrics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rule:
+                  $ref: '#/components/schemas/CreateAlertRule'
+                metrics:
+                  type: object
+                  additionalProperties:
+                    type: number
+            example:
+              rule:
+                name: "High Price Deviation"
+                assetCode: "XLM"
+                conditions:
+                  - metric: "price"
+                    alertType: "price_deviation"
+                    compareOp: "gt"
+                    threshold: 5.0
+                conditionOp: "AND"
+                priority: "high"
+                cooldownSeconds: 3600
+              metrics:
+                price: 10.5
+      responses:
+        '200':
+          description: Dry run results
+          content:
+            application/json:
+              example:
+                triggered: true
+                results:
+                  - metric: "price"
+                    value: 10.5
+                    threshold: 5.0
+                    triggered: true
+
+components:
+  schemas:
+    CreateAlertRule:
+      type: object
+      required:
+        - name
+        - assetCode
+        - conditions
+        - conditionOp
+        - priority
+        - cooldownSeconds
+      properties:
+        ownerAddress:
+          type: string
+        name:
+          type: string
+        assetCode:
+          type: string
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertCondition'
+        conditionOp:
+          type: string
+          enum: [AND, OR]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        cooldownSeconds:
+          type: integer
+        webhookUrl:
+          type: string
+          format: uri
+
+    UpdateAlertRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertCondition'
+        conditionOp:
+          type: string
+          enum: [AND, OR]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        cooldownSeconds:
+          type: integer
+        webhookUrl:
+          type: string
+          format: uri
+        isActive:
+          type: boolean
+
+    AlertCondition:
+      type: object
+      properties:
+        metric:
+          type: string
+        alertType:
+          type: string
+          enum:
+            - price_deviation
+            - supply_mismatch
+            - bridge_downtime
+            - health_score_drop
+            - volume_anomaly
+            - reserve_ratio_breach
+        compareOp:
+          type: string
+          enum: [gt, lt, eq]
+        threshold:
+          type: number

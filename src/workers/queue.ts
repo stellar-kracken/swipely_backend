@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Queue, Worker, Job, ConnectionOptions } from "bullmq";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";

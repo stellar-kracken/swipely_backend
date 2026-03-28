@@ -54,6 +54,19 @@ const envSchema = z.object({
 
   // External APIs
   CIRCLE_API_KEY: z.string().optional(),
+  // Circle API base URL — use sandbox for non-production environments
+  CIRCLE_API_URL: z
+    .string()
+    .url()
+    .default("https://api.circle.com"),
+  // Request timeout for Circle API calls (ms)
+  CIRCLE_API_TIMEOUT_MS: z.coerce.number().default(5000),
+  // Redis TTL for cached Circle price responses (seconds)
+  CIRCLE_CACHE_TTL_SEC: z.coerce.number().default(60),
+  // Circle API rate limiting: max requests per window
+  CIRCLE_RATE_LIMIT_MAX: z.coerce.number().default(30),
+  // Circle API rate limiting: window duration (ms)
+  CIRCLE_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   COINBASE_API_KEY: z.string().optional(),
   COINBASE_API_SECRET: z.string().optional(),
 
@@ -65,6 +78,12 @@ const envSchema = z.object({
   // Rate Limiting
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  // Burst allowance as a fraction of RATE_LIMIT_MAX (0.1 = 10% extra)
+  RATE_LIMIT_BURST_MULTIPLIER: z.coerce.number().min(0).default(0.1),
+  // Comma-separated IPs that bypass rate limiting entirely
+  RATE_LIMIT_WHITELIST_IPS: z.string().optional(),
+  // Comma-separated API keys that bypass rate limiting entirely
+  RATE_LIMIT_WHITELIST_KEYS: z.string().optional(),
 
   // Alert Thresholds
   PRICE_DEVIATION_THRESHOLD: z.coerce.number().default(0.02),

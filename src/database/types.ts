@@ -236,3 +236,45 @@ export interface CircuitBreakerPause {
   created_at: Date;
   updated_at: Date;
 }
+
+// ─── user preferences ───────────────────────────────────────────────────────
+
+export type PreferenceCategory = "notifications" | "display" | "alerts";
+
+export interface PreferenceDefault {
+  id: string;
+  category: PreferenceCategory;
+  pref_key: string;
+  value: unknown;
+  schema_version: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface UserPreferenceState {
+  user_id: string;
+  version: number;
+  schema_version: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface UserPreference {
+  id: string;
+  user_id: string;
+  category: PreferenceCategory;
+  pref_key: string;
+  value: unknown;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface PreferenceMigrationHistory {
+  id: string;
+  user_id: string | null;
+  from_schema_version: number;
+  to_schema_version: number;
+  migration_name: string;
+  metadata: unknown;
+  created_at: Date;
+}
