@@ -10,6 +10,7 @@ import { configRoutes } from "./config.js";
 import { aggregationRoutes } from "./aggregation.js";
 import { metadataRoutes } from "./metadata.js";
 import { analyticsRoutes } from "./analytics.js";
+import { watchlistsRoutes } from "./watchlists.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -23,4 +24,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(aggregationRoutes, { prefix: "/api/v1/aggregation" });
   server.register(metadataRoutes, { prefix: "/api/v1/metadata" });
   server.register(analyticsRoutes, { prefix: "/api/v1/analytics" });
+  server.register(watchlistsRoutes, { prefix: "/api/v1/watchlists" });
 }
