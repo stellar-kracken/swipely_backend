@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AssetMetadataService } from "../../src/services/assetMetadata.service";
 
 vi.mock("../../src/database/connection", () => ({
-  getDb: vi.fn(() => ({
+  getDatabase: vi.fn(() => ({
     select: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     first: vi.fn().mockResolvedValue(null),
@@ -15,7 +15,7 @@ vi.mock("../../src/database/connection", () => ({
 }));
 
 vi.mock("../../src/utils/logger", () => ({
-  default: {
+  logger: {
     info: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),

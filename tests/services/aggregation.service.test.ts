@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AggregationService } from "../../src/services/aggregation.service";
 
 vi.mock("../../src/database/connection", () => ({
-  getDb: vi.fn(() => ({
+  getDatabase: vi.fn(() => ({
     raw: vi.fn().mockResolvedValue({ rows: [] }),
     select: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
@@ -10,17 +10,17 @@ vi.mock("../../src/database/connection", () => ({
 }));
 
 vi.mock("../../src/utils/redis", () => ({
-  getRedis: vi.fn(() => ({
+  redis: {
     get: vi.fn().mockResolvedValue(null),
     setex: vi.fn(),
     keys: vi.fn().mockResolvedValue([]),
     del: vi.fn(),
     ttl: vi.fn().mockResolvedValue(-1),
-  })),
+  },
 }));
 
 vi.mock("../../src/utils/logger", () => ({
-  default: {
+  logger: {
     info: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),

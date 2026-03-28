@@ -3,6 +3,7 @@ import { redis } from "../utils/redis.js";
 import { config, SUPPORTED_ASSETS } from "../config/index.js";
 import { getOrderBook, getLiquidityPools, HorizonTimeoutError, HorizonClientError } from "../utils/stellar.js";
 import * as StellarSdk from "@stellar/stellar-sdk";
+import { CircleSource } from "./sources/circle.source.js";
 
 export class PriceFetchError extends Error {
   constructor(message: string, public readonly source: string, public readonly asset: string, public readonly originalError?: unknown) {
@@ -26,6 +27,7 @@ export interface AggregatedPrice {
 }
 
 export class PriceService {
+  private readonly circleSource = new CircleSource();
   /**
    * Fetches the best available price from the Stellar Classic SDEX orderbook.
    * Calculates a volume-weighted price from the top of the orderbook (depth up to 5).
@@ -167,23 +169,25 @@ export class PriceService {
       logger.error({ error: redisError, symbol }, "Redis cache read error");
     }
 
-    const results = await Promise.allSettled([
-      this.fetchSDEXPrice(symbol),
-      this.fetchAMMPrice(symbol)
-    ]);
+    const fetches: Promise<{ price: number; volume: number; name: string }>[] = [
+      this.fetchSDEXPrice(symbol).then((r) => ({ ...r, name: "Stellar DEX" })),
+      this.fetchAMMPrice(symbol).then((r) => ({ ...r, name: "Stellar AMM" })),
+    ];
+
+    if (CircleSource.supports(symbol)) {
+      fetches.push(this.circleSource.getPriceSourceData(symbol));
+    }
+
+    const results = await Promise.allSettled(fetches);
 
     const sourceData: { price: number; volume: number; name: string }[] = [];
 
-    if (results[0].status === "fulfilled") {
-      sourceData.push({ ...results[0].value, name: "Stellar DEX" });
-    } else {
-      logger.warn({ error: results[0].reason, symbol }, "SDEX fetch failed");
-    }
-
-    if (results[1].status === "fulfilled") {
-      sourceData.push({ ...results[1].value, name: "Stellar AMM" });
-    } else {
-      logger.warn({ error: results[1].reason, symbol }, "AMM fetch failed");
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        sourceData.push(result.value);
+      } else {
+        logger.warn({ error: result.reason, symbol }, "Price source fetch failed");
+      }
     }
 
     if (sourceData.length === 0) {
@@ -218,7 +222,13 @@ export class PriceService {
     source: string
   ): Promise<PriceSource | null> {
     logger.info({ symbol, source }, "Fetching price from specific source");
-    // TODO: Fetch price from the specified source
+
+    if (source.toLowerCase() === "circle") {
+      if (!CircleSource.supports(symbol)) return null;
+      const { price } = await this.circleSource.getPriceSourceData(symbol);
+      return { source: "Circle", price, timestamp: new Date().toISOString() };
+    }
+
     return null;
   }
 
