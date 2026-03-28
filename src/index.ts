@@ -12,6 +12,7 @@ import {
 import { initJobSystem } from "./workers/index.js";
 import { JobQueue } from "./workers/queue.js";
 import { registerTracing } from "./api/middleware/tracing.js";
+import { registerValidation } from "./api/middleware/validation.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -29,6 +30,9 @@ export async function buildServer() {
 
   // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
   await registerRateLimiting(server as any);
+
+  // Data validation middleware
+  await registerValidation(server as any);
 
   await server.register(websocket);
 

@@ -135,6 +135,18 @@ const envSchema = z.object({
   HEALTH_CHECK_MEMORY_THRESHOLD: z.coerce.number().default(90),
   HEALTH_CHECK_DISK_THRESHOLD: z.coerce.number().default(80),
   HEALTH_CHECK_EXTERNAL_APIS: z.string().default("true"),
+
+  // Data Validation Configuration
+  VALIDATION_STRICT_MODE: z.coerce.boolean().default(false),
+  VALIDATION_ADMIN_BYPASS: z.coerce.boolean().default(true),
+  VALIDATION_BATCH_SIZE: z.coerce.number().default(100),
+  VALIDATION_MAX_BATCH_SIZE: z.coerce.number().default(1000),
+  VALIDATION_DUPLICATE_CHECK: z.coerce.boolean().default(true),
+  VALIDATION_NORMALIZATION: z.coerce.boolean().default(true),
+  VALIDATION_CONSISTENCY_CHECKS: z.coerce.boolean().default(true),
+  VALIDATION_ERROR_THRESHOLD: z.coerce.number().default(0.1), // 10% error rate threshold
+  VALIDATION_WARNING_THRESHOLD: z.coerce.number().default(0.3), // 30% warning threshold
+  VALIDATION_DATA_QUALITY_THRESHOLD: z.coerce.number().default(70), // 70% quality score threshold
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
