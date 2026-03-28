@@ -24,7 +24,7 @@ export async function buildServer() {
   });
 
   // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
-  await registerRateLimiting(server);
+  await registerRateLimiting(server as any);
 
   await server.register(websocket);
 

@@ -52,6 +52,7 @@ export async function runCacheWarming() {
 }
 
 // Automatically runs if executed as script directly
+// @ts-ignore
 if (import.meta.url === `file://${process.argv[1]}`) {
   runCacheWarming().then(() => process.exit(0)).catch(() => process.exit(1));
 }

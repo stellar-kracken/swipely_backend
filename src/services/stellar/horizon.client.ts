@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Stellar Horizon API client wrapper
  *

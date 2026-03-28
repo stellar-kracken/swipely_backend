@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { AlertService } from "../../services/alert.service.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { applyStrictRateLimit } from "../middleware/rateLimit.js";
 import {
   getPaginationParams,
   formatPaginatedResponse,
@@ -18,9 +17,6 @@ import {
 
 export async function alertsRoutes(server: FastifyInstance) {
   const alertService = new AlertService();
-
-  // Apply strict rate limiting to this plugin
-  await applyStrictRateLimit(server);
 
   // Add auth middleware as preHandler for all routes in this plugin
   server.addHook("preHandler", authMiddleware);
