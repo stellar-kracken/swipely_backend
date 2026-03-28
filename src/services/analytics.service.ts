@@ -1,6 +1,8 @@
-import { knex } from "../database/connection.js";
+import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
 import { redis } from "../utils/redis.js";
+
+const knex = getDatabase();
 
 export type TimeInterval = "1h" | "1d" | "1w" | "1M";
 export type AggregationPeriod = "hourly" | "daily" | "weekly" | "monthly";
@@ -169,10 +171,10 @@ export class AnalyticsService {
       .select("*")
       .where("is_active", true);
 
-    const totalTVL = bridges.reduce((sum, b) => sum + parseFloat(b.total_value_locked), 0);
+    const totalTVL = bridges.reduce((sum: number, b: any) => sum + parseFloat(b.total_value_locked), 0);
 
     const comparisons: BridgeComparison[] = await Promise.all(
-      bridges.map(async (bridge) => {
+      bridges.map(async (bridge: any) => {
         const [volumeStats, previousVolume] = await Promise.all([
           knex("bridge_volume_stats")
             .select(
@@ -241,7 +243,7 @@ export class AnalyticsService {
       .where("is_active", true);
 
     const rankings: AssetRanking[] = await Promise.all(
-      assets.map(async (asset) => {
+      assets.map(async (asset: any) => {
         const [liquidityData, volumeData, healthData, previousHealth, bridgeCount] = await Promise.all([
           knex("liquidity_snapshots")
             .sum("tvl_usd as total_tvl")
