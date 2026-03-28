@@ -7,6 +7,7 @@ import { circuitBreakerRoutes } from "./circuitBreaker.js";
 import { preferencesRoutes } from "./preferences.js";
 import jobsRoutes from "./jobs.js";
 import { analyticsRoutes } from "./analytics.js";
+import { watchlistsRoutes } from "./watchlists.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -17,4 +18,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(preferencesRoutes, { prefix: "/api/v1/preferences" });
   server.register(jobsRoutes, { prefix: "/api/v1/jobs" });
   server.register(analyticsRoutes, { prefix: "/api/v1/analytics" });
+  server.register(watchlistsRoutes, { prefix: "/api/v1/watchlists" });
 }
