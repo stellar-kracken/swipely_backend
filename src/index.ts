@@ -1,11 +1,19 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
+import {
+  registerRateLimiting,
+  getRateLimitMetrics,
+} from "./api/middleware/rateLimit.middleware.js";
+import { initJobSystem } from "./workers/index.js";
+import { JobQueue } from "./workers/queue.js";
+import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -18,10 +26,12 @@ export async function buildServer() {
     credentials: true,
   });
 
-  await server.register(rateLimit, {
-    max: config.RATE_LIMIT_MAX,
-    timeWindow: config.RATE_LIMIT_WINDOW_MS,
-  });
+  // OpenAPI / Swagger — must be registered before routes so schemas are collected
+  await server.register(swagger, swaggerOptions);
+  await server.register(swaggerUi, swaggerUiOptions);
+
+  // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
+  await registerRateLimiting(server as any);
 
   await server.register(websocket);
 
@@ -29,9 +39,51 @@ export async function buildServer() {
   await registerRoutes(server as any);
 
   // Health check
-  server.get("/health", async () => {
-    return { status: "ok", timestamp: new Date().toISOString() };
-  });
+  server.get(
+    "/health",
+    {
+      schema: {
+        tags: ["Health"],
+        summary: "Service health check",
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", example: "ok" },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+    },
+    async () => {
+      return { status: "ok", timestamp: new Date().toISOString() };
+    },
+  );
+
+  // Rate-limit metrics (internal monitoring endpoint)
+  server.get(
+    "/api/v1/metrics/rate-limits",
+    {
+      schema: {
+        tags: ["Cache"],
+        summary: "Rate-limit sliding-window metrics",
+        security: [{ ApiKeyAuth: [] }],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              metrics: { type: "object", additionalProperties: true },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+    },
+    async () => {
+      return { metrics: getRateLimitMetrics(), timestamp: new Date().toISOString() };
+    },
+  );
 
   return server;
 }
@@ -46,7 +98,18 @@ async function start() {
     );
 
     // Initialize background jobs
-    startBridgeVerificationJob();
+    await initJobSystem();
+
+    // Graceful shutdown
+    const shutdown = async () => {
+      logger.info("Closing server...");
+      await server.close();
+      await JobQueue.getInstance().stop();
+      process.exit(0);
+    };
+
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
   } catch (err) {
     server.log.error(err);
     process.exit(1);

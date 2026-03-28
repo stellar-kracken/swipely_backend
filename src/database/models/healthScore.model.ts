@@ -34,7 +34,7 @@ export class HealthScoreModel {
     bucketInterval: string,
     startTime: Date
   ): Promise<{ bucket: Date; avg_score: number }[]> {
-    return this.db.raw(
+    const result = await this.db.raw(
       `SELECT time_bucket(?, time) AS bucket, AVG(overall_score) AS avg_score
        FROM health_scores
        WHERE symbol = ? AND time >= ?
@@ -42,16 +42,29 @@ export class HealthScoreModel {
        ORDER BY bucket DESC`,
       [bucketInterval, symbol, startTime]
     );
+
+    const rows = (result as unknown as { rows?: unknown[] }).rows ?? [];
+    return rows.map((row: any) => ({
+      bucket: row.bucket instanceof Date ? row.bucket : new Date(row.bucket),
+      avg_score:
+        typeof row.avg_score === "number" ? row.avg_score : Number(row.avg_score),
+    }));
   }
 
   /**
    * Get the latest health scores for all monitored assets
    */
   async getLatestForAll(): Promise<HealthScoreRecord[]> {
-    return this.db.raw(
+    const result = await this.db.raw(
       `SELECT DISTINCT ON (symbol) *
        FROM health_scores
        ORDER BY symbol, time DESC`
     );
+
+    return ((result as unknown as { rows?: HealthScoreRecord[] }).rows ?? [])
+      .map((row) => ({
+        ...row,
+        time: row.time instanceof Date ? row.time : new Date(row.time),
+      }));
   }
 }

@@ -32,18 +32,41 @@ const envSchema = z.object({
     .string()
     .url()
     .default("https://soroban-testnet.stellar.org"),
+  SOROBAN_MAINNET_RPC_URL: z.string().url().optional(),
+  CIRCUIT_BREAKER_CONTRACT_ID: z.string().optional(),
+  LIQUIDITY_CONTRACT_ADDRESS: z.string().optional(),
 
-  // Ethereum
+  // Ethereum / EVM chains
   ETHEREUM_RPC_URL: z.string().url().optional(),
   ETHEREUM_RPC_WS_URL: z.string().url().optional(),
+  ETHEREUM_RPC_FALLBACK_URL: z.string().url().optional(),
   RPC_PROVIDER_TYPE: z.enum(["http", "ws"]).default("http"),
   USDC_BRIDGE_ADDRESS: z.string().optional(),
   EURC_BRIDGE_ADDRESS: z.string().optional(),
   USDC_TOKEN_ADDRESS: z.string().optional(),
   EURC_TOKEN_ADDRESS: z.string().optional(),
+  // Polygon
+  POLYGON_RPC_URL: z.string().url().optional(),
+  POLYGON_RPC_FALLBACK_URL: z.string().url().optional(),
+  // Base
+  BASE_RPC_URL: z.string().url().optional(),
+  BASE_RPC_FALLBACK_URL: z.string().url().optional(),
 
   // External APIs
   CIRCLE_API_KEY: z.string().optional(),
+  // Circle API base URL — use sandbox for non-production environments
+  CIRCLE_API_URL: z
+    .string()
+    .url()
+    .default("https://api.circle.com"),
+  // Request timeout for Circle API calls (ms)
+  CIRCLE_API_TIMEOUT_MS: z.coerce.number().default(5000),
+  // Redis TTL for cached Circle price responses (seconds)
+  CIRCLE_CACHE_TTL_SEC: z.coerce.number().default(60),
+  // Circle API rate limiting: max requests per window
+  CIRCLE_RATE_LIMIT_MAX: z.coerce.number().default(30),
+  // Circle API rate limiting: window duration (ms)
+  CIRCLE_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   COINBASE_API_KEY: z.string().optional(),
   COINBASE_API_SECRET: z.string().optional(),
 
@@ -55,6 +78,12 @@ const envSchema = z.object({
   // Rate Limiting
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  // Burst allowance as a fraction of RATE_LIMIT_MAX (0.1 = 10% extra)
+  RATE_LIMIT_BURST_MULTIPLIER: z.coerce.number().min(0).default(0.1),
+  // Comma-separated IPs that bypass rate limiting entirely
+  RATE_LIMIT_WHITELIST_IPS: z.string().optional(),
+  // Comma-separated API keys that bypass rate limiting entirely
+  RATE_LIMIT_WHITELIST_KEYS: z.string().optional(),
 
   // Alert Thresholds
   PRICE_DEVIATION_THRESHOLD: z.coerce.number().default(0.02),
@@ -67,6 +96,13 @@ const envSchema = z.object({
   // Price Aggregation
   HORIZON_TIMEOUT_MS: z.coerce.number().default(500),
   REDIS_CACHE_TTL_SEC: z.coerce.number().default(30),
+
+  // Health Score Weights
+  HEALTH_WEIGHT_LIQUIDITY: z.coerce.number().default(0.25),
+  HEALTH_WEIGHT_PRICE: z.coerce.number().default(0.25),
+  HEALTH_WEIGHT_BRIDGE: z.coerce.number().default(0.20),
+  HEALTH_WEIGHT_RESERVES: z.coerce.number().default(0.20),
+  HEALTH_WEIGHT_VOLUME: z.coerce.number().default(0.10),
 
   // Export Service
   EXPORT_STORAGE_PATH: z.string().default("./exports"),

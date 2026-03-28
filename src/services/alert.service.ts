@@ -1,5 +1,6 @@
 import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
+import { circuitBreakerQueue } from "../workers/circuitBreaker.worker.js";
 
 export type AlertType =
   | "price_deviation"
@@ -117,6 +118,107 @@ export class AlertService {
     return this.mapRule(row);
   }
 
+  async deleteRule(ruleId: string, ownerAddress: string): Promise<boolean> {
+    const db = getDatabase();
+    const count = await db("alert_rules")
+      .where({ id: ruleId, owner_address: ownerAddress })
+      .delete();
+    return count > 0;
+  }
+
+  async bulkCreateRules(
+    ownerAddress: string,
+    rules: Array<{
+      name: string;
+      assetCode: string;
+      conditions: AlertCondition[];
+      conditionOp: ConditionOp;
+      priority: AlertPriority;
+      cooldownSeconds: number;
+      webhookUrl?: string;
+    }>
+  ): Promise<AlertRule[]> {
+    const db = getDatabase();
+    const records = rules.map((r) => ({
+      owner_address: ownerAddress,
+      name: r.name,
+      asset_code: r.assetCode,
+      conditions: JSON.stringify(r.conditions),
+      condition_op: r.conditionOp,
+      priority: r.priority,
+      cooldown_seconds: r.cooldownSeconds,
+      webhook_url: r.webhookUrl ?? null,
+    }));
+
+    const rows = await db("alert_rules").insert(records).returning("*");
+    logger.info(
+      { ownerAddress, count: rows.length },
+      "Bulk alert rules created"
+    );
+    return rows.map(this.mapRule);
+  }
+
+  async bulkUpdateRules(
+    ownerAddress: string,
+    updates: Array<{
+      id: string;
+      name?: string;
+      conditions?: AlertCondition[];
+      conditionOp?: ConditionOp;
+      priority?: AlertPriority;
+      cooldownSeconds?: number;
+      webhookUrl?: string | null;
+    }>
+  ): Promise<AlertRule[]> {
+    const db = getDatabase();
+    const results: AlertRule[] = [];
+
+    await db.transaction(async (trx) => {
+      for (const update of updates) {
+        const patch: Record<string, unknown> = {};
+        if (update.name !== undefined) patch.name = update.name;
+        if (update.conditions !== undefined)
+          patch.conditions = JSON.stringify(update.conditions);
+        if (update.conditionOp !== undefined)
+          patch.condition_op = update.conditionOp;
+        if (update.priority !== undefined) patch.priority = update.priority;
+        if (update.cooldownSeconds !== undefined)
+          patch.cooldown_seconds = update.cooldownSeconds;
+        if (update.webhookUrl !== undefined)
+          patch.webhook_url = update.webhookUrl;
+
+        const [row] = await trx("alert_rules")
+          .where({ id: update.id, owner_address: ownerAddress })
+          .update(patch)
+          .returning("*");
+
+        if (row) {
+          results.push(this.mapRule(row));
+        }
+      }
+    });
+
+    logger.info(
+      { ownerAddress, count: results.length },
+      "Bulk alert rules updated"
+    );
+    return results;
+  }
+
+  async bulkDeleteRules(
+    ownerAddress: string,
+    ruleIds: string[]
+  ): Promise<number> {
+    const db = getDatabase();
+    const count = await db("alert_rules")
+      .where({ owner_address: ownerAddress })
+      .whereIn("id", ruleIds)
+      .delete();
+
+    logger.info({ ownerAddress, count }, "Bulk alert rules deleted");
+    return count;
+  }
+
   async setRuleActive(
     ruleId: string,
     ownerAddress: string,
@@ -192,6 +294,11 @@ export class AlertService {
         await this.markRuleTriggered(rule.id, now);
         triggered.push(event);
 
+        // Trigger circuit breaker if configured
+        await this.triggerCircuitBreaker(event, rule).catch((err) =>
+          logger.error({ ruleId: rule.id, err }, "Circuit breaker trigger failed")
+        );
+
         if (rule.webhookUrl) {
           await this.dispatchWebhook(rule.webhookUrl, event, rule).catch(
             (err) =>
@@ -247,6 +354,87 @@ export class AlertService {
       .orderBy("time", "desc")
       .limit(limit);
     return rows.map(this.mapEvent);
+  }
+
+  async getAlertStats(ownerAddress: string): Promise<{
+    totalRules: number;
+    activeRules: number;
+    totalAlerts24h: number;
+    alertsByPriority: Record<AlertPriority, number>;
+    alertsByType: Record<AlertType, number>;
+  }> {
+    const db = getDatabase();
+    const now = new Date();
+    const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const [rulesCount] = await db("alert_rules")
+      .where({ owner_address: ownerAddress })
+      .count({ total: "*", active: db.raw("CASE WHEN is_active THEN 1 END") });
+
+    const alerts24h = await db("alert_events")
+      .join("alert_rules", "alert_events.rule_id", "alert_rules.id")
+      .where("alert_rules.owner_address", ownerAddress)
+      .where("alert_events.time", ">=", last24h)
+      .select("alert_events.priority", "alert_events.alert_type");
+
+    const stats = {
+      totalRules: parseInt(rulesCount.total as string) || 0,
+      activeRules: parseInt(rulesCount.active as string) || 0,
+      totalAlerts24h: alerts24h.length,
+      alertsByPriority: {
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+      } as Record<AlertPriority, number>,
+      alertsByType: {
+        price_deviation: 0,
+        supply_mismatch: 0,
+        bridge_downtime: 0,
+        health_score_drop: 0,
+        volume_anomaly: 0,
+        reserve_ratio_breach: 0,
+      } as Record<AlertType, number>,
+    };
+
+    for (const alert of alerts24h) {
+      const priority = alert.priority as AlertPriority;
+      const alertType = alert.alert_type as AlertType;
+
+      if (stats.alertsByPriority[priority] !== undefined) {
+        stats.alertsByPriority[priority]++;
+      }
+      if (stats.alertsByType[alertType] !== undefined) {
+        stats.alertsByType[alertType]++;
+      }
+    }
+
+    return stats;
+  }
+
+  async dryRunAlert(
+    rule: Omit<AlertRule, "id" | "isActive" | "createdAt" | "updatedAt" | "lastTriggeredAt" | "onChainRuleId">,
+    metrics: Record<string, number>
+  ): Promise<{ fires: boolean; event?: Omit<AlertEvent, "webhookDelivered" | "onChainEventId" | "time"> }> {
+    const { fires, triggeredValue, threshold, metric, alertType } =
+      this.evaluateConditions(rule as AlertRule, metrics);
+
+    if (fires) {
+      return {
+        fires: true,
+        event: {
+          ruleId: "dry-run",
+          assetCode: rule.assetCode,
+          alertType,
+          priority: rule.priority,
+          triggeredValue,
+          threshold,
+          metric,
+        },
+      };
+    }
+
+    return { fires: false };
   }
 
   private evaluateConditions(
@@ -378,6 +566,47 @@ export class AlertService {
         .update({ webhook_attempts: db.raw("webhook_attempts + 1") });
       throw new Error(`Webhook responded ${response.status}`);
     }
+  }
+
+  private async triggerCircuitBreaker(
+    event: AlertEvent,
+    rule: AlertRule
+  ): Promise<void> {
+    // Map alert types to circuit breaker trigger data
+    const severity = event.priority === "critical" ? "high" :
+                    event.priority === "high" ? "medium" : "low";
+
+    const triggerData: any = {
+      alertId: `${event.ruleId}-${event.time.getTime()}`,
+      alertType: event.alertType.replace(/_/g, "_"), // Convert to snake_case
+      assetCode: event.assetCode,
+      severity,
+      value: event.triggeredValue,
+      threshold: event.threshold,
+    };
+
+    // Add bridge ID for bridge-related alerts
+    if (event.alertType.includes("supply") || event.alertType.includes("bridge")) {
+      // For bridge alerts, we might need to derive bridge ID from asset or rule
+      // This is a simplified version - in production, you'd have bridge mapping
+      triggerData.bridgeId = `bridge-${event.assetCode}`;
+    }
+
+    await circuitBreakerQueue.add("circuit-breaker-trigger", triggerData, {
+      priority: event.priority === "critical" ? 1 : 2,
+      delay: 0, // Process immediately
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 5000,
+      },
+    });
+
+    logger.info({
+      alertId: triggerData.alertId,
+      alertType: event.alertType,
+      severity
+    }, "Circuit breaker trigger queued");
   }
 
   private mapRule(row: Record<string, unknown>): AlertRule {
