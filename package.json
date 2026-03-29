@@ -28,7 +28,11 @@
     "migrate:unlock": "tsx src/database/migrate.ts unlock",
     "seed": "tsx src/database/seed.ts",
     "seed:specific": "tsx src/database/seed.ts run",
-    "docs:generate": "tsx scripts/generate-openapi.ts"
+    "docs:generate": "tsx scripts/generate-openapi.ts",
+    "backup": "tsx src/cli/backup.cli.ts",
+    "backup:create": "tsx src/cli/backup.cli.ts create",
+    "backup:list": "tsx src/cli/backup.cli.ts list",
+    "backup:cleanup": "tsx src/cli/backup.cli.ts cleanup"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
