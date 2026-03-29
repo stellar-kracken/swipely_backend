@@ -24,18 +24,20 @@ export async function processAnalyticsAggregation(job: Job): Promise<void> {
         logger.info("Bridge comparisons aggregated and cached");
         break;
 
-      case "asset-rankings":
+      case "asset-rankings": {
         await analyticsService.getAssetRankings();
         logger.info("Asset rankings aggregated and cached");
         break;
+      }
 
-      case "volume-aggregation":
+      case "volume-aggregation": {
         const { period, symbol, bridgeName } = params || {};
         await analyticsService.getVolumeAggregation(period || "daily", symbol, bridgeName);
         logger.info({ period, symbol, bridgeName }, "Volume aggregation computed and cached");
         break;
+      }
 
-      case "top-performers":
+      case "top-performers": {
         const { performerType, metric, limit } = params || {};
         await analyticsService.getTopPerformers(
           performerType || "assets",
@@ -45,17 +47,19 @@ export async function processAnalyticsAggregation(job: Job): Promise<void> {
         logger.info({ performerType, metric, limit }, "Top performers computed and cached");
         break;
 
-      case "trends":
+      case "trends": {
         const { trendMetric, trendSymbol, trendBridge } = params || {};
         await analyticsService.calculateTrend(trendMetric, trendSymbol, trendBridge);
         logger.info({ trendMetric, trendSymbol, trendBridge }, "Trend calculated and cached");
         break;
+      }
 
-      case "invalidate-cache":
+      case "invalidate-cache": {
         const { pattern } = params || {};
         await analyticsService.invalidateCache(pattern);
         logger.info({ pattern }, "Analytics cache invalidated");
         break;
+      }
 
       default:
         logger.warn({ type }, "Unknown analytics aggregation type");
