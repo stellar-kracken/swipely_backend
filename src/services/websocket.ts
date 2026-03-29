@@ -10,6 +10,7 @@ export type WebsocketMessageType =
   | "price_update"
   | "health_score"
   | "alert_notification"
+  | "transaction_update"
   | "system"
   | "batch"
   | "replay";
