@@ -84,6 +84,12 @@ describe("ExportService", () => {
     beforeEach(() => {
         exportService = new ExportService();
         vi.clearAllMocks();
+        mockFirst.mockReset();
+        mockWhere.mockReset();
+        mockWhere.mockReturnThis();
+        mockDel.mockReset();
+        mockUpdate.mockReset();
+        mockInsert.mockReset();
     });
 
     describe("requestExport", () => {
@@ -281,7 +287,8 @@ describe("ExportService", () => {
                 exportService.deleteExport("export-123")
             ).resolves.not.toThrow();
 
-            expect(mockDel).toHaveBeenCalledWith({ id: "export-123" });
+            expect(mockWhere).toHaveBeenCalledWith({ id: "export-123" });
+            expect(mockDel).toHaveBeenCalled();
         });
 
         it("handles missing file gracefully", async () => {
