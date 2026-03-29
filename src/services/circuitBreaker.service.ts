@@ -2,6 +2,7 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
+import { getMetricsService } from "./metrics.service.js";
 
 export interface CircuitBreakerConfig {
   contractId: string;
@@ -222,6 +223,13 @@ class CircuitBreakerService {
 
     tx.sign(signer);
     await this.server.sendTransaction(tx);
+    
+    // Record circuit breaker trip metric
+    const metricsService = getMetricsService();
+    metricsService.circuitBreakerTrips.inc({
+      bridge_id: identifier || 'global',
+      reason: reason,
+    });
   }
 
   /**

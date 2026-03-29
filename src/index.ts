@@ -8,6 +8,7 @@ import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
 import { registerTracing } from "./api/middleware/tracing.js";
 import { registerValidation } from "./api/middleware/validation.js";
+import { registerMetrics } from "./api/middleware/metrics.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
 import {
   registerRateLimiting,
@@ -24,6 +25,9 @@ export async function buildServer() {
 
   // Register tracing middleware first (to capture all requests)
   await registerTracing(server as any);
+
+  // Register metrics middleware (to capture all requests)
+  await registerMetrics(server as any);
 
   // Register plugins
   await server.register(cors, {
