@@ -60,7 +60,7 @@ export async function validationAdminRoutes(server: FastifyInstance) {
     }
   >(
     "/validate",
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request, reply) => {
       try {
         const { data, dataType, operation = "create", existingData } = request.body;
         
@@ -120,7 +120,7 @@ export async function validationAdminRoutes(server: FastifyInstance) {
     }
   >(
     "/validate/batch",
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request, reply) => {
       try {
         const { items, dataType, batchSize = 100 } = request.body;
         
@@ -247,7 +247,7 @@ export async function validationAdminRoutes(server: FastifyInstance) {
     }
   >(
     "/report",
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request, reply) => {
       try {
         const { dataType, timeRange } = request.query;
         const metrics = validationService.getMetrics();
@@ -295,7 +295,7 @@ export async function validationAdminRoutes(server: FastifyInstance) {
     }
   >(
     "/export",
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request, reply) => {
       try {
         const { format = "json" } = request.query;
         const metrics = validationService.getMetrics();
@@ -381,7 +381,7 @@ export async function validationAdminRoutes(server: FastifyInstance) {
     }
   >(
     "/rules/:dataType",
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request, reply) => {
       try {
         const { dataType } = request.params;
         
@@ -422,7 +422,7 @@ export async function validationAdminRoutes(server: FastifyInstance) {
     }
   >(
     "/test",
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request, reply) => {
       try {
         const { dataType, sampleData } = request.body;
         

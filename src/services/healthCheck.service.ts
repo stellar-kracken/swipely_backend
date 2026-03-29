@@ -1,5 +1,5 @@
 import { logger } from "../utils/logger.js";
-import { getConnection } from "../database/connection.js";
+import { getDatabase } from "../database/connection.js";
 import Redis from "ioredis";
 import { config } from "../config/index.js";
 
@@ -53,9 +53,9 @@ export class HealthCheckService {
       host: config.REDIS_HOST,
       port: config.REDIS_PORT,
       password: config.REDIS_PASSWORD || undefined,
-      retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
       lazyConnect: true,
+      retryStrategy: (times: number) => Math.min(times * 100, 2_000),
     });
   }
 
@@ -157,7 +157,7 @@ export class HealthCheckService {
     const startTime = Date.now();
 
     try {
-      const connection = getConnection();
+      const connection = getDatabase();
       await connection.raw("SELECT 1");
 
       // Check table count

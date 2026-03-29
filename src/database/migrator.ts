@@ -1,10 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { getDatabase } from "./connection.js";
 import { logger } from "../utils/logger.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface MigrationRecord {
   name: string;
@@ -37,7 +35,7 @@ export interface MigrationHistoryRow {
  */
 export class Migrator {
   private db = getDatabase();
-  private migrationsDir = path.resolve(__dirname, "migrations");
+  private migrationsDir = path.resolve(process.cwd(), "src/database/migrations");
   readonly env: string = process.env.NODE_ENV ?? "development";
 
   // ---------------------------------------------------------------------------

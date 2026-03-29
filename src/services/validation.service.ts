@@ -42,7 +42,7 @@ export interface ValidationError {
   message: string;
   value?: any;
   expected?: any;
-  severity: "error" | "critical";
+  severity: "error" | "warning" | "critical";
 }
 
 export interface ValidationWarning {
@@ -128,11 +128,11 @@ const AssetSchema = z.object({
     })
   }),
   bridge_provider: z.string()
-    .nullable()
-    .max(50, "Bridge provider must be 50 characters or less"),
+    .max(50, "Bridge provider must be 50 characters or less")
+    .nullable(),
   source_chain: z.string()
-    .nullable()
-    .max(50, "Source chain must be 50 characters or less"),
+    .max(50, "Source chain must be 50 characters or less")
+    .nullable(),
   is_active: z.boolean().default(true)
 });
 
@@ -638,6 +638,7 @@ class DuplicateDetector {
 
 export class ValidationService {
   private validationLogger = createChildLogger('validation');
+  private typeNames = ["asset", "bridge", "priceRecord", "healthScore", "liquiditySnapshot", "alertRule"] as const;
   private validationMetrics = {
     totalValidations: 0,
     validationErrors: 0,
@@ -656,8 +657,7 @@ export class ValidationService {
     alertRule: AlertRuleSchema,
   };
 
-  // Custom rules mapping
-  private customRules = {
+  private customRules: Record<(typeof this.typeNames)[number], ValidationRule[]> = {
     asset: CustomValidationRules.assetConsistencyRules,
     bridge: CustomValidationRules.bridgeConsistencyRules,
     priceRecord: CustomValidationRules.priceDataRules,
@@ -666,24 +666,25 @@ export class ValidationService {
     alertRule: [],
   };
 
-  // Normalizer mapping
-  private normalizers = {
+  private normalizers: Record<(typeof this.typeNames)[number], (data: any) => any> = {
     asset: DataNormalizer.normalizeAsset,
     bridge: DataNormalizer.normalizeBridge,
     priceRecord: DataNormalizer.normalizePriceRecord,
     healthScore: DataNormalizer.normalizeHealthScore,
     liquiditySnapshot: DataNormalizer.normalizeLiquiditySnapshot,
-    alertRule: (data: any) => data, // No normalization needed for alert rules
+    alertRule: (data: any) => data,
   };
 
-  // Duplicate detector mapping
-  private duplicateDetectors = {
+  private duplicateDetectors: Record<
+    (typeof this.typeNames)[number],
+    (data: any, context: ValidationContext) => Promise<DuplicateDetectionResult>
+  > = {
     asset: DuplicateDetector.detectAssetDuplicate,
     bridge: DuplicateDetector.detectBridgeDuplicate,
     priceRecord: DuplicateDetector.detectPriceRecordDuplicate,
-    healthScore: async () => ({ isDuplicate: false, duplicateFields: [], duplicateIds: [], similarity: 0 }),
-    liquiditySnapshot: async () => ({ isDuplicate: false, duplicateFields: [], duplicateIds: [], similarity: 0 }),
-    alertRule: async () => ({ isDuplicate: false, duplicateFields: [], duplicateIds: [], similarity: 0 }),
+    healthScore: async (_data, _context) => ({ isDuplicate: false, duplicateFields: [], duplicateIds: [], similarity: 0 }),
+    liquiditySnapshot: async (_data, _context) => ({ isDuplicate: false, duplicateFields: [], duplicateIds: [], similarity: 0 }),
+    alertRule: async (_data, _context) => ({ isDuplicate: false, duplicateFields: [], duplicateIds: [], similarity: 0 }),
   };
 
   /**
@@ -742,8 +743,8 @@ export class ValidationService {
               field: error.path.join('.'),
               code: "SCHEMA_VALIDATION",
               message: error.message,
-              value: error.received,
-              expected: error.expected,
+              value: (error as any).received,
+              expected: (error as any).expected,
               severity: "error"
             });
           });

@@ -7,6 +7,11 @@ import { config } from "../../config/index.js";
 const traceManager = TraceManager.getInstance();
 const tracingLogger = createChildLogger('tracing-admin');
 
+function getActiveTraceEntries(): Array<[string, any]> {
+  const activeTraces = (traceManager as any).activeTraces as Map<string, any>;
+  return Array.from(activeTraces.entries());
+}
+
 /**
  * Admin routes for request tracing and logging management
  * These routes require admin API key authentication
@@ -30,9 +35,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
     "/traces/active",
     async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const activeTraces = Array.from(
-          (traceManager as any).activeTraces.entries()
-        ).map(([requestId, context]: [string, any]) => ({
+        const activeTraces = getActiveTraceEntries().map(([requestId, context]) => ({
           requestId,
           correlationId: context.correlationId,
           traceId: context.traceId,
@@ -81,9 +84,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         const { includeSpans = false } = request.query;
 
         // Find all spans for this trace
-        const activeTraces = Array.from(
-          (traceManager as any).activeTraces.entries()
-        ).filter(([_, context]: [string, any]) => context.traceId === traceId);
+        const activeTraces = getActiveTraceEntries().filter(([_, context]) => context.traceId === traceId);
 
         if (activeTraces.length === 0) {
           return reply.status(404).send({
@@ -95,7 +96,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
 
         const traceData = {
           traceId,
-          spans: includeSpans ? activeTraces.map(([requestId, context]: [string, any]) => ({
+          spans: includeSpans ? activeTraces.map(([requestId, context]) => ({
             requestId,
             spanId: context.spanId,
             parentSpanId: context.parentSpanId,
@@ -109,10 +110,10 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           })) : undefined,
           summary: {
             spanCount: activeTraces.length,
-            startTime: Math.min(...activeTraces.map(([_, context]: [string, any]) => context.startTime)),
-            totalDuration: Math.max(...activeTraces.map(([_, context]: [string, any]) => Date.now() - context.startTime)),
-            uniqueUsers: new Set(activeTraces.map(([_, context]: [string, any]) => context.userId).filter(Boolean)).size,
-            uniqueIPs: new Set(activeTraces.map(([_, context]: [string, any]) => context.ip)).size,
+            startTime: Math.min(...activeTraces.map(([_, context]) => context.startTime)),
+            totalDuration: Math.max(...activeTraces.map(([_, context]) => Date.now() - context.startTime)),
+            uniqueUsers: new Set(activeTraces.map(([_, context]) => context.userId).filter(Boolean)).size,
+            uniqueIPs: new Set(activeTraces.map(([_, context]) => context.ip)).size,
           },
           timestamp: new Date().toISOString(),
         };
@@ -222,9 +223,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         const { traceId } = request.params;
 
         // Find all spans for this trace
-        const activeTraces = Array.from(
-          (traceManager as any).activeTraces.entries()
-        ).filter(([_, context]: [string, any]) => context.traceId === traceId);
+        const activeTraces = getActiveTraceEntries().filter(([_, context]) => context.traceId === traceId);
 
         if (activeTraces.length === 0) {
           return reply.status(404).send({
@@ -235,7 +234,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         }
 
         // Create trace visualization data
-        const traceStart = Math.min(...activeTraces.map(([_, context]: [string, any]) => context.startTime));
+        const traceStart = Math.min(...activeTraces.map(([_, context]) => context.startTime));
         const now = Date.now();
 
         const visualizationData = {
@@ -246,7 +245,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           services: [
             {
               name: "bridge-watch-api",
-              spans: activeTraces.map(([requestId, context]: [string, any]) => ({
+              spans: activeTraces.map(([requestId, context]) => ({
                 spanId: context.spanId,
                 parentSpanId: context.parentSpanId,
                 operationName: `${context.tags?.method || 'UNKNOWN'} ${context.tags?.url || '/'}`,
@@ -309,11 +308,9 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         
         if (traceId) {
           // Export specific trace
-          const activeTraces = Array.from(
-            (traceManager as any).activeTraces.entries()
-          ).filter(([_, context]: [string, any]) => context.traceId === traceId);
+          const activeTraces = getActiveTraceEntries().filter(([_, context]) => context.traceId === traceId);
           
-          traces = activeTraces.map(([requestId, context]: [string, any]) => ({
+          traces = activeTraces.map(([requestId, context]) => ({
             requestId,
             traceId: context.traceId,
             correlationId: context.correlationId,
@@ -330,11 +327,9 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         } else {
           // Export all traces within time range
           const cutoff = timeRange ? Date.now() - timeRange : 0;
-          const activeTraces = Array.from(
-            (traceManager as any).activeTraces.entries()
-          ).filter(([_, context]: [string, any]) => context.startTime >= cutoff);
+          const activeTraces = getActiveTraceEntries().filter(([_, context]) => context.startTime >= cutoff);
           
-          traces = activeTraces.map(([requestId, context]: [string, any]) => ({
+          traces = activeTraces.map(([requestId, context]) => ({
             requestId,
             traceId: context.traceId,
             correlationId: context.correlationId,
