@@ -9,12 +9,8 @@ const tracingLogger = createChildLogger('tracing-admin');
 type ActiveTraceEntry = [string, any];
 
 function getActiveTraceEntries(): ActiveTraceEntry[] {
-  return Array.from((traceManager as any).activeTraces.entries()) as ActiveTraceEntry[];
-}
-
-function getActiveTraceEntries(): Array<[string, any]> {
   const activeTraces = (traceManager as any).activeTraces as Map<string, any>;
-  return Array.from(activeTraces.entries());
+  return Array.from(activeTraces.entries()) as ActiveTraceEntry[];
 }
 
 /**
