@@ -128,7 +128,7 @@ export class AnalyticsService {
             .avg("overall_score as avg")
             .where("time", ">=", knex.raw("NOW() - INTERVAL '1 hour'"))
             .first(),
-        ]);
+        ] as any);
 
         const stats: ProtocolStats = {
           totalValueLocked: tvlResult?.total || "0",
@@ -186,7 +186,7 @@ export class AnalyticsService {
                 .where("stat_date", ">=", knex.raw("CURRENT_DATE - INTERVAL '2 days'"))
                 .where("stat_date", "<", knex.raw("CURRENT_DATE - INTERVAL '1 day'"))
                 .first(),
-            ]);
+            ] as any);
 
             const currentVolume = parseFloat(volumeStats?.volume_24h || "0");
             const prevVolume = parseFloat(previousVolume?.total || "0") + parseFloat(previousVolume?.total_out || "0");
