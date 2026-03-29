@@ -6,6 +6,16 @@ import { config } from "../../config/index.js";
 
 const traceManager = TraceManager.getInstance();
 const tracingLogger = createChildLogger('tracing-admin');
+type ActiveTraceEntry = [string, any];
+
+function getActiveTraceEntries(): ActiveTraceEntry[] {
+  return Array.from((traceManager as any).activeTraces.entries()) as ActiveTraceEntry[];
+}
+
+function getActiveTraceEntries(): Array<[string, any]> {
+  const activeTraces = (traceManager as any).activeTraces as Map<string, any>;
+  return Array.from(activeTraces.entries());
+}
 
 /**
  * Admin routes for request tracing and logging management
@@ -30,9 +40,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
     "/traces/active",
     async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const activeTraces = Array.from(
-          (traceManager as any).activeTraces.entries()
-        ).map(([requestId, context]: [string, any]) => ({
+        const activeTraces = getActiveTraceEntries().map(([requestId, context]) => ({
           requestId,
           correlationId: context.correlationId,
           traceId: context.traceId,
@@ -56,7 +64,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           },
         };
       } catch (error) {
-        tracingLogger.error("Failed to get active traces", error as Error);
+        tracingLogger.error({ err: error }, "Failed to get active traces");
         return reply.status(500).send({
           success: false,
           error: "Internal Server Error",
@@ -81,9 +89,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         const { includeSpans = false } = request.query;
 
         // Find all spans for this trace
-        const activeTraces = Array.from(
-          (traceManager as any).activeTraces.entries()
-        ).filter(([_, context]: [string, any]) => context.traceId === traceId);
+        const activeTraces = getActiveTraceEntries().filter(([_, context]) => context.traceId === traceId);
 
         if (activeTraces.length === 0) {
           return reply.status(404).send({
@@ -95,7 +101,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
 
         const traceData = {
           traceId,
-          spans: includeSpans ? activeTraces.map(([requestId, context]: [string, any]) => ({
+          spans: includeSpans ? activeTraces.map(([requestId, context]) => ({
             requestId,
             spanId: context.spanId,
             parentSpanId: context.parentSpanId,
@@ -109,10 +115,10 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           })) : undefined,
           summary: {
             spanCount: activeTraces.length,
-            startTime: Math.min(...activeTraces.map(([_, context]: [string, any]) => context.startTime)),
-            totalDuration: Math.max(...activeTraces.map(([_, context]: [string, any]) => Date.now() - context.startTime)),
-            uniqueUsers: new Set(activeTraces.map(([_, context]: [string, any]) => context.userId).filter(Boolean)).size,
-            uniqueIPs: new Set(activeTraces.map(([_, context]: [string, any]) => context.ip)).size,
+            startTime: Math.min(...activeTraces.map(([_, context]) => context.startTime)),
+            totalDuration: Math.max(...activeTraces.map(([_, context]) => Date.now() - context.startTime)),
+            uniqueUsers: new Set(activeTraces.map(([_, context]) => context.userId).filter(Boolean)).size,
+            uniqueIPs: new Set(activeTraces.map(([_, context]) => context.ip)).size,
           },
           timestamp: new Date().toISOString(),
         };
@@ -122,7 +128,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           data: traceData,
         };
       } catch (error) {
-        tracingLogger.error("Failed to get trace", error as Error);
+        tracingLogger.error({ err: error }, "Failed to get trace");
         return reply.status(500).send({
           success: false,
           error: "Internal Server Error",
@@ -199,7 +205,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           },
         };
       } catch (error) {
-        tracingLogger.error("Failed to get performance metrics", error as Error);
+        tracingLogger.error({ err: error }, "Failed to get performance metrics");
         return reply.status(500).send({
           success: false,
           error: "Internal Server Error",
@@ -222,9 +228,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         const { traceId } = request.params;
 
         // Find all spans for this trace
-        const activeTraces = Array.from(
-          (traceManager as any).activeTraces.entries()
-        ).filter(([_, context]: [string, any]) => context.traceId === traceId);
+        const activeTraces = getActiveTraceEntries().filter(([_, context]) => context.traceId === traceId);
 
         if (activeTraces.length === 0) {
           return reply.status(404).send({
@@ -235,7 +239,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         }
 
         // Create trace visualization data
-        const traceStart = Math.min(...activeTraces.map(([_, context]: [string, any]) => context.startTime));
+        const traceStart = Math.min(...activeTraces.map(([_, context]) => context.startTime));
         const now = Date.now();
 
         const visualizationData = {
@@ -246,7 +250,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           services: [
             {
               name: "bridge-watch-api",
-              spans: activeTraces.map(([requestId, context]: [string, any]) => ({
+              spans: activeTraces.map(([requestId, context]) => ({
                 spanId: context.spanId,
                 parentSpanId: context.parentSpanId,
                 operationName: `${context.tags?.method || 'UNKNOWN'} ${context.tags?.url || '/'}`,
@@ -279,7 +283,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           data: visualizationData,
         };
       } catch (error) {
-        tracingLogger.error("Failed to get trace visualization", error as Error);
+        tracingLogger.error({ err: error }, "Failed to get trace visualization");
         return reply.status(500).send({
           success: false,
           error: "Internal Server Error",
@@ -309,11 +313,9 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         
         if (traceId) {
           // Export specific trace
-          const activeTraces = Array.from(
-            (traceManager as any).activeTraces.entries()
-          ).filter(([_, context]: [string, any]) => context.traceId === traceId);
+          const activeTraces = getActiveTraceEntries().filter(([_, context]) => context.traceId === traceId);
           
-          traces = activeTraces.map(([requestId, context]: [string, any]) => ({
+          traces = activeTraces.map(([requestId, context]) => ({
             requestId,
             traceId: context.traceId,
             correlationId: context.correlationId,
@@ -330,11 +332,9 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
         } else {
           // Export all traces within time range
           const cutoff = timeRange ? Date.now() - timeRange : 0;
-          const activeTraces = Array.from(
-            (traceManager as any).activeTraces.entries()
-          ).filter(([_, context]: [string, any]) => context.startTime >= cutoff);
+          const activeTraces = getActiveTraceEntries().filter(([_, context]) => context.startTime >= cutoff);
           
-          traces = activeTraces.map(([requestId, context]: [string, any]) => ({
+          traces = activeTraces.map(([requestId, context]) => ({
             requestId,
             traceId: context.traceId,
             correlationId: context.correlationId,
@@ -377,7 +377,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           }, null, 2);
         }
       } catch (error) {
-        tracingLogger.error("Failed to export traces", error as Error);
+        tracingLogger.error({ err: error }, "Failed to export traces");
         return reply.status(500).send({
           success: false,
           error: "Internal Server Error",
@@ -409,7 +409,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           data: loggingConfig,
         };
       } catch (error) {
-        tracingLogger.error("Failed to get logging config", error as Error);
+        tracingLogger.error({ err: error }, "Failed to get logging config");
         return reply.status(500).send({
           success: false,
           error: "Internal Server Error",
@@ -438,7 +438,7 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
           },
         };
       } catch (error) {
-        tracingLogger.error("Tracing admin health check failed", error as Error);
+        tracingLogger.error({ err: error }, "Tracing admin health check failed");
         return reply.status(503).send({
           success: false,
           status: "unhealthy",

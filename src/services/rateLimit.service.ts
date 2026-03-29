@@ -125,6 +125,7 @@ export class RateLimitService {
           
           return {
             endpoint,
+            limit: 0,
             usage: windowData,
             resetTime: new Date(Date.now() + ttl),
           };
