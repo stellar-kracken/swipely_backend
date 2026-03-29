@@ -548,7 +548,7 @@ class DataNormalizer {
 // ---------------------------------------------------------------------------
 
 class DuplicateDetector {
-  static async detectAssetDuplicate(data: any, _context: ValidationContext): Promise<DuplicateDetectionResult> {
+  static async detectAssetDuplicate(data: any, context: ValidationContext): Promise<DuplicateDetectionResult> {
     // This would typically query the database
     // For now, return a basic implementation
     const duplicateFields: string[] = [];
@@ -569,7 +569,7 @@ class DuplicateDetector {
     };
   }
 
-  static async detectBridgeDuplicate(data: any, _context: ValidationContext): Promise<DuplicateDetectionResult> {
+  static async detectBridgeDuplicate(data: any, context: ValidationContext): Promise<DuplicateDetectionResult> {
     const duplicateFields: string[] = [];
     const duplicateIds: string[] = [];
     
@@ -588,7 +588,7 @@ class DuplicateDetector {
     };
   }
 
-  static async detectPriceRecordDuplicate(data: any, _context: ValidationContext): Promise<DuplicateDetectionResult> {
+  static async detectPriceRecordDuplicate(data: any, context: ValidationContext): Promise<DuplicateDetectionResult> {
     const duplicateFields: string[] = [];
     const duplicateIds: string[] = [];
     
@@ -683,10 +683,10 @@ export class ValidationService {
 
     try {
       // Check for admin bypass
-      if (context.isAdmin && config.VALIDATION_ADMIN_BYPASS) {
+      if (_context.isAdmin && config.VALIDATION_ADMIN_BYPASS) {
         this.validationLogger.warn("Admin bypass used for validation", {
           dataType,
-          correlationId: context.correlationId,
+          correlationId: _context.correlationId,
         });
         
         return {
@@ -752,7 +752,7 @@ export class ValidationService {
       const customRules = this.customRules[dataType] || [];
       for (const rule of customRules) {
         if (rule.enabled) {
-          const ruleErrors = rule.validator(normalizedData, context);
+          const ruleErrors = rule.validator(normalizedData, _context);
           if (rule.severity === "error") {
             errors.push(...ruleErrors);
           } else {
@@ -772,7 +772,7 @@ export class ValidationService {
       let duplicateCheck = false;
       const duplicateDetector = this.duplicateDetectors[dataType];
       if (duplicateDetector) {
-        const duplicateResult = await duplicateDetector(normalizedData, context);
+        const duplicateResult = await duplicateDetector(normalizedData, _context);
         duplicateCheck = true;
         
         if (duplicateResult.isDuplicate) {
@@ -819,7 +819,7 @@ export class ValidationService {
     } catch (error) {
       this.validationLogger.error("Validation failed with error", error as Error, {
         dataType,
-        correlationId: context.correlationId,
+        correlationId: _context.correlationId,
       });
 
       return {
@@ -867,7 +867,7 @@ export class ValidationService {
       
       const batchPromises = batch.map(async (item, index) => {
         const itemContext = {
-          ...context,
+          ..._context,
           batchIndex: i + index,
         };
         

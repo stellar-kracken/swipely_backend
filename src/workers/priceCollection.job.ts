@@ -12,10 +12,10 @@ export async function processPriceCollection(job: Job) {
   
   for (const asset of testAssets) {
     try {
-      await priceService.getAggregatedPrice(asset.code);
-      logger.debug({ asset: asset.code }, "Fetched aggregated price");
+      await priceService.getAggregatedPrice(asset);
+      logger.debug({ asset }, "Fetched aggregated price");
     } catch (error) {
-      logger.error({ asset: asset.code, error }, "Failed to fetch aggregated price in background job");
+      logger.error({ asset, error }, "Failed to fetch aggregated price in background job");
       // Don't throw here to allow other assets to be fetched
     }
   }

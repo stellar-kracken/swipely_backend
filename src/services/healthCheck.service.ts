@@ -280,6 +280,7 @@ export class HealthCheckService {
    * System resource checks (disk space, memory usage)
    */
   private async checkSystemResources(): Promise<HealthCheckResult> {
+    const startTime = Date.now();
     try {
       const memUsage = process.memoryUsage();
       const totalMemory = os.totalmem();

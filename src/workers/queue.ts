@@ -45,7 +45,7 @@ export class JobQueue {
   public async addRepeatableJob(name: string, data: unknown, cron: string) {
     logger.info({ jobName: name, cron }, "Scheduling repeatable job");
     return this.queue.add(name, data, {
-      repeat: { cron },
+      repeat: { pattern: cron },
     });
   }
 

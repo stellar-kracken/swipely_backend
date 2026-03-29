@@ -7,11 +7,6 @@ import { config } from "../../config/index.js";
 
 const traceManager = TraceManager.getInstance();
 const tracingLogger = createChildLogger('tracing-admin');
-type ActiveTraceEntry = [string, any];
-
-function getActiveTraceEntries(): ActiveTraceEntry[] {
-  return Array.from((traceManager as any).activeTraces.entries()) as ActiveTraceEntry[];
-}
 
 function getActiveTraceEntries(): Array<[string, any]> {
   const activeTraces = (traceManager as any).activeTraces as Map<string, any>;
