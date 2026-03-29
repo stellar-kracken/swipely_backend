@@ -91,7 +91,9 @@ export async function getOrderBook(
 ): Promise<StellarSdk.Horizon.ServerApi.OrderbookRecord> {
   const server = getHorizonServer();
 
-  const base = new StellarSdk.Asset(baseCode, baseIssuer);
+  const base = (baseCode === "XLM" || baseIssuer === "native")
+    ? StellarSdk.Asset.native()
+    : new StellarSdk.Asset(baseCode, baseIssuer);
   const counter = counterIssuer && counterCode !== "XLM"
     ? new StellarSdk.Asset(counterCode, counterIssuer)
     : StellarSdk.Asset.native();

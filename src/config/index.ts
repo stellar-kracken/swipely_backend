@@ -122,6 +122,7 @@ const envSchema = z.object({
   // Price Aggregation
   HORIZON_TIMEOUT_MS: z.coerce.number().default(500),
   REDIS_CACHE_TTL_SEC: z.coerce.number().default(30),
+  REDIS_PRICE_CACHE_PREFIX: z.string().default("price:aggregated"),
 
   // Health Score Weights
   HEALTH_WEIGHT_LIQUIDITY: z.coerce.number().default(0.25),
