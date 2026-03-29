@@ -4,11 +4,24 @@ import { beforeAll, afterAll, vi } from "vitest";
 vi.mock("ioredis", () => {
   return {
     default: class RedisMock {
-      on = vi.fn();
-      get = vi.fn();
-      set = vi.fn();
-      quit = vi.fn();
-      disconnect = vi.fn();
+      on = vi.fn().mockReturnThis();
+      get = vi.fn().mockResolvedValue(null);
+      set = vi.fn().mockResolvedValue("OK");
+      quit = vi.fn().mockResolvedValue(null);
+      disconnect = vi.fn().mockResolvedValue(null);
+      del = vi.fn().mockResolvedValue(0);
+      keys = vi.fn().mockResolvedValue([]);
+      incr = vi.fn().mockResolvedValue(0);
+      decr = vi.fn().mockResolvedValue(0);
+      incrby = vi.fn().mockResolvedValue(0);
+      decrby = vi.fn().mockResolvedValue(0);
+      expire = vi.fn().mockResolvedValue(1);
+      ttl = vi.fn().mockResolvedValue(-1);
+      pttl = vi.fn().mockResolvedValue(-1);
+      exists = vi.fn().mockResolvedValue(0);
+      type = vi.fn().mockResolvedValue("none");
+      mget = vi.fn().mockResolvedValue([]);
+      mset = vi.fn().mockResolvedValue("OK");
     }
   };
 });
