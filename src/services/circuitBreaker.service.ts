@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
@@ -171,7 +170,8 @@ class CircuitBreakerService {
     identifier: string | undefined,
     reason: string
   ): Promise<void> {
-    const contract = new StellarSdk.Contract(this.contractId);
+    // Contract instance creation for potential future use or verification
+    new StellarSdk.Contract(this.contractId);
 
     let operation: StellarSdk.xdr.Operation;
     switch (scope) {
@@ -228,7 +228,8 @@ class CircuitBreakerService {
    * Request recovery from pause
    */
   async requestRecovery(signer: StellarSdk.Keypair, pauseId: number): Promise<void> {
-    const contract = new StellarSdk.Contract(this.contractId);
+    // Contract instance creation for potential future use or verification
+    new StellarSdk.Contract(this.contractId);
 
     const operation = StellarSdk.Operation.invokeContractFunction({
       contract: this.contractId,

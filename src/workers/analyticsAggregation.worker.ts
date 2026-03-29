@@ -14,15 +14,17 @@ export async function processAnalyticsAggregation(job: Job): Promise<void> {
 
   try {
     switch (type) {
-      case "protocol-stats":
+      case "protocol-stats": {
         await analyticsService.getProtocolStats();
         logger.info("Protocol stats aggregated and cached");
         break;
+      }
 
-      case "bridge-comparisons":
+      case "bridge-comparisons": {
         await analyticsService.getBridgeComparisons();
         logger.info("Bridge comparisons aggregated and cached");
         break;
+      }
 
       case "asset-rankings": {
         await analyticsService.getAssetRankings();
@@ -46,6 +48,7 @@ export async function processAnalyticsAggregation(job: Job): Promise<void> {
         );
         logger.info({ performerType, metric, limit }, "Top performers computed and cached");
         break;
+      }
 
       case "trends": {
         const { trendMetric, trendSymbol, trendBridge } = params || {};

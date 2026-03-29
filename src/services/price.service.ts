@@ -1,6 +1,6 @@
 import { logger } from "../utils/logger.js";
 import { CacheService, CacheTTL } from "../utils/cache.js";
-import { config, SUPPORTED_ASSETS } from "../config/index.js";
+import { SUPPORTED_ASSETS } from "../config/index.js";
 import { getOrderBook, getLiquidityPools, HorizonTimeoutError, HorizonClientError } from "../utils/stellar.js";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { CircleSource } from "./sources/circle.source.js";
