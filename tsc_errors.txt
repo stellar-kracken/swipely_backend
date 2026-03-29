@@ -1,0 +1,75 @@
+src/api/routes/alerts.routes.ts(4,10): error TS2305: Module '"../middleware/rateLimit.js"' has no exported member 'applyStrictRateLimit'.
+src/index.ts(27,30): error TS2345: Argument of type 'FastifyInstance<Server<typeof IncomingMessage, typeof ServerResponse>, IncomingMessage, ServerResponse<IncomingMessage>, Logger<...>, FastifyTypeProviderDefault> & PromiseLike<...>' is not assignable to parameter of type 'FastifyInstance<RawServerDefault, IncomingMessage, ServerResponse<IncomingMessage>, FastifyBaseLogger, FastifyTypeProviderDefault>'.
+  The types of 'withTypeProvider().route' are incompatible between these types.
+    Type '<RouteGeneric extends RouteGenericInterface = RouteGenericInterface, ContextConfig = unknown, const SchemaCompiler extends FastifySchema = FastifySchema>(opts: RouteOptions<Server<typeof IncomingMessage, typeof ServerResponse>, ... 6 more ..., Logger<...>>) => FastifyInstance<...>' is not assignable to type '<RouteGeneric extends RouteGenericInterface = RouteGenericInterface, ContextConfig = unknown, const SchemaCompiler extends FastifySchema = FastifySchema>(opts: RouteOptions<RawServerDefault, IncomingMessage, ... 5 more ..., FastifyBaseLogger>) => FastifyInstance<...>'.
+      Types of parameters 'opts' and 'opts' are incompatible.
+        Type 'RouteOptions<RawServerDefault, IncomingMessage, ServerResponse<IncomingMessage>, any, any, any, any, FastifyBaseLogger>' is not assignable to type 'RouteOptions<Server<typeof IncomingMessage, typeof ServerResponse>, IncomingMessage, ServerResponse<IncomingMessage>, ... 4 more ..., Logger<...>>'.
+          Types of property 'childLoggerFactory' are incompatible.
+            Type 'FastifyChildLoggerFactory<RawServerDefault, IncomingMessage, ServerResponse<IncomingMessage>, FastifyBaseLogger, any> | undefined' is not assignable to type 'FastifyChildLoggerFactory<Server<typeof IncomingMessage, typeof ServerResponse>, IncomingMessage, ServerResponse<IncomingMessage>, Logger<...>, any> | undefined'.
+              Type 'FastifyChildLoggerFactory<RawServerDefault, IncomingMessage, ServerResponse<IncomingMessage>, FastifyBaseLogger, any>' is not assignable to type 'FastifyChildLoggerFactory<Server<typeof IncomingMessage, typeof ServerResponse>, IncomingMessage, ServerResponse<IncomingMessage>, Logger<...>, any>'.
+                Type 'FastifyBaseLogger' is not assignable to type 'Logger<never, boolean>'.
+                  Type 'FastifyBaseLogger' is missing the following properties from type 'LoggerExtras<never, boolean>': version, levels, useLevelLabels, levelVal, and 20 more.
+src/jobs/cacheWarming.ts(55,5): error TS1470: The 'import.meta' meta-property is not allowed in files which will build into CommonJS output.
+src/services/circuitBreaker.service.ts(41,59): error TS2339: Property 'SOROBAN_RPC_URL' does not exist on type 'CircuitBreakerConfig'.
+src/services/circuitBreaker.service.ts(91,18): error TS2339: Property 'result' does not exist on type 'SimulateTransactionResponse'.
+  Property 'result' does not exist on type 'SimulateTransactionErrorResponse'.
+src/services/circuitBreaker.service.ts(92,52): error TS2339: Property 'result' does not exist on type 'SimulateTransactionResponse'.
+  Property 'result' does not exist on type 'SimulateTransactionErrorResponse'.
+src/services/circuitBreaker.service.ts(96,53): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(obj: "Circuit breaker check failed:", msg?: undefined): void', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'undefined'.
+  Overload 2 of 3, '(obj: "Circuit breaker check failed:", msg?: undefined, ...args: unknown[]): void', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'undefined'.
+src/services/circuitBreaker.service.ts(124,18): error TS2339: Property 'result' does not exist on type 'SimulateTransactionResponse'.
+  Property 'result' does not exist on type 'SimulateTransactionErrorResponse'.
+src/services/circuitBreaker.service.ts(125,52): error TS2339: Property 'result' does not exist on type 'SimulateTransactionResponse'.
+  Property 'result' does not exist on type 'SimulateTransactionErrorResponse'.
+src/services/circuitBreaker.service.ts(129,47): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(obj: "Whitelist check failed:", msg?: undefined): void', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'undefined'.
+  Overload 2 of 3, '(obj: "Whitelist check failed:", msg?: undefined, ...args: unknown[]): void', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'undefined'.
+src/services/circuitBreaker.service.ts(154,18): error TS2339: Property 'result' does not exist on type 'SimulateTransactionResponse'.
+  Property 'result' does not exist on type 'SimulateTransactionErrorResponse'.
+src/services/circuitBreaker.service.ts(155,52): error TS2339: Property 'result' does not exist on type 'SimulateTransactionResponse'.
+  Property 'result' does not exist on type 'SimulateTransactionErrorResponse'.
+src/services/circuitBreaker.service.ts(159,53): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(obj: "Asset whitelist check failed:", msg?: undefined): void', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'undefined'.
+  Overload 2 of 3, '(obj: "Asset whitelist check failed:", msg?: undefined, ...args: unknown[]): void', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'undefined'.
+src/services/circuitBreaker.service.ts(182,45): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ScAddress'.
+src/services/circuitBreaker.service.ts(193,45): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ScAddress'.
+src/services/circuitBreaker.service.ts(205,45): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ScAddress'.
+src/services/circuitBreaker.service.ts(236,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ScAddress'.
+src/services/circuitBreaker.service.ts(262,7): error TS2353: Object literal may only specify known properties, and 'SOROBAN_RPC_URL' does not exist in type 'CircuitBreakerConfig'.
+src/services/stellar/horizon.client.ts(77,34): error TS2694: Namespace '"/home/godbrand/Documents/GitHub/Bridge-Watch/node_modules/@stellar/stellar-sdk/lib/horizon/index"' has no exported member 'AccountThresholds'.
+src/services/stellar/horizon.client.ts(78,29): error TS2694: Namespace '"/home/godbrand/Documents/GitHub/Bridge-Watch/node_modules/@stellar/stellar-sdk/lib/horizon/index"' has no exported member 'Flags'.
+src/services/stellar/horizon.client.ts(597,9): error TS2322: Type '(payment: StellarSdk.Horizon.ServerApi.PaymentOperationRecord) => void' is not assignable to type '(value: CollectionPage<PaymentOperationRecord | CreateAccountOperationRecord | AccountMergeOperationRecord | PathPaymentOperationRecord | PathPaymentStrictSendOperationRecord | InvokeHostFunctionOperationRecord>) => void'.
+  Types of parameters 'payment' and 'value' are incompatible.
+    Type 'CollectionPage<PaymentOperationRecord | CreateAccountOperationRecord | AccountMergeOperationRecord | PathPaymentOperationRecord | PathPaymentStrictSendOperationRecord | InvokeHostFunctionOperationRecord>' is missing the following properties from type 'PaymentOperationRecord': sender, receiver, self, succeeds, and 16 more.
+src/services/stellar/horizon.client.ts(600,9): error TS2322: Type '(err: Error) => void' is not assignable to type '(event: MessageEvent) => void'.
+  Types of parameters 'err' and 'event' are incompatible.
+    Type 'MessageEvent<any>' is missing the following properties from type 'Error': name, message
+src/services/stellar/horizon.client.ts(638,9): error TS2322: Type '(tx: StellarSdk.Horizon.ServerApi.TransactionRecord) => void' is not assignable to type '(value: CollectionPage<TransactionRecord>) => void'.
+  Types of parameters 'tx' and 'value' are incompatible.
+    Type 'CollectionPage<TransactionRecord>' is missing the following properties from type 'TransactionRecord': ledger_attr, account, effects, ledger, and 22 more.
+src/services/stellar/horizon.client.ts(641,9): error TS2322: Type '(err: Error) => void' is not assignable to type '(event: MessageEvent) => void'.
+  Types of parameters 'err' and 'event' are incompatible.
+    Type 'MessageEvent<any>' is missing the following properties from type 'Error': name, message
+src/services/stellar/horizon.client.ts(677,9): error TS2322: Type '(ledger: StellarSdk.Horizon.ServerApi.LedgerRecord) => void' is not assignable to type '(value: CollectionPage<LedgerRecord>) => void'.
+  Types of parameters 'ledger' and 'value' are incompatible.
+    Type 'CollectionPage<LedgerRecord>' is missing the following properties from type 'LedgerRecord': id, paging_token, hash, prev_hash, and 21 more.
+src/services/stellar/horizon.client.ts(680,9): error TS2322: Type '(err: Error) => void' is not assignable to type '(event: MessageEvent) => void'.
+  Types of parameters 'err' and 'event' are incompatible.
+    Type 'MessageEvent<any>' is missing the following properties from type 'Error': name, message
+src/services/stellar/horizon.client.ts(772,11): error TS2352: Conversion of type 'Asset' to type '{ assetType: string; assetCode?: string | undefined; assetIssuer?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'assetType' is missing in type 'Asset' but required in type '{ assetType: string; assetCode?: string | undefined; assetIssuer?: string | undefined; }'.
+src/services/stellar/horizon.client.ts(773,14): error TS2352: Conversion of type 'Asset' to type '{ assetType: string; assetCode?: string | undefined; assetIssuer?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'assetType' is missing in type 'Asset' but required in type '{ assetType: string; assetCode?: string | undefined; assetIssuer?: string | undefined; }'.
+src/services/stellar/horizon.client.ts(785,5): error TS2322: Type 'string' is not assignable to type 'number'.
+src/services/stellar/horizon.client.ts(791,29): error TS2339: Property 'last_modified_ledger' does not exist on type 'LiquidityPoolRecord'.
+src/services/stellar/horizon.client.ts(801,5): error TS2322: Type 'CallFunction<LedgerRecord>' is not assignable to type 'number'.
+src/services/stellar/horizon.client.ts(804,5): error TS2322: Type 'string | number' is not assignable to type 'string'.
+  Type 'number' is not assignable to type 'string'.
+src/workers/queue.ts(48,17): error TS2353: Object literal may only specify known properties, and 'cron' does not exist in type 'RepeatOptions'.
