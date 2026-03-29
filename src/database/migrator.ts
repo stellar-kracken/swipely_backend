@@ -1,10 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { getDatabase } from "./connection.js";
 import { logger } from "../utils/logger.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface MigrationRecord {
   name: string;
@@ -18,6 +16,24 @@ export interface MigrationHistoryRow {
   name: string;
   batch: number;
   migration_time: Date;
+}
+
+type MigrationListEntry = string | { name?: string; file?: string };
+
+function getMigrationName(entry: MigrationListEntry): string {
+  if (typeof entry === "string") {
+    return entry;
+  }
+
+  if (typeof entry?.name === "string") {
+    return entry.name;
+  }
+
+  if (typeof entry?.file === "string") {
+    return entry.file;
+  }
+
+  return String(entry);
 }
 
 /**
@@ -37,7 +53,7 @@ export interface MigrationHistoryRow {
  */
 export class Migrator {
   private db = getDatabase();
-  private migrationsDir = path.resolve(__dirname, "migrations");
+  private migrationsDir = path.resolve(process.cwd(), "src/database/migrations");
   readonly env: string = process.env.NODE_ENV ?? "development";
 
   // ---------------------------------------------------------------------------
@@ -95,8 +111,10 @@ export class Migrator {
    */
   async status(): Promise<MigrationRecord[]> {
     // Knex migrate.list() returns [completedNames, pendingNames]
-    const [completedNames, pendingNames]: [string[], string[]] =
-      (await this.db.migrate.list()) as [string[], string[]];
+    const [completedEntries, pendingEntries]: [MigrationListEntry[], MigrationListEntry[]] =
+      (await this.db.migrate.list()) as [MigrationListEntry[], MigrationListEntry[]];
+    const completedNames = completedEntries.map(getMigrationName);
+    const pendingNames = pendingEntries.map(getMigrationName);
 
     // Fetch batch / timestamp details for applied migrations
     let appliedDetails: Array<{ name: string; batch: number; migration_time: Date }> = [];
@@ -273,7 +291,7 @@ export async function down(knex: Knex): Promise<void> {
       return [];
     }
 
-    const col = (s: string, w: number) => s.slice(0, w).padEnd(w);
+    const col = (s: unknown, w: number) => String(s).slice(0, w).padEnd(w);
     const hr = "-".repeat(86);
 
     console.log("\nMigration History:");
@@ -336,7 +354,7 @@ export async function down(knex: Knex): Promise<void> {
     const applied = records.filter((r) => r.status === "applied");
     const pending = records.filter((r) => r.status === "pending");
 
-    const col = (s: string, w: number) => s.slice(0, w).padEnd(w);
+    const col = (s: unknown, w: number) => String(s).slice(0, w).padEnd(w);
     const hr = "=".repeat(86);
     const div = "-".repeat(86);
 
