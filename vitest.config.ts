@@ -8,9 +8,15 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "html", "lcov"],
+      reporter: ["text", "html", "lcov", "json-summary"],
       include: ["src/**/*.ts"],
       exclude: ["src/index.ts"],
+      thresholds: {
+        lines: 60,
+        functions: 55,
+        branches: 35,
+        statements: 60,
+      },
     },
     projects: [
       {
