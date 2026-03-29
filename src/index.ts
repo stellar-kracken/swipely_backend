@@ -18,7 +18,38 @@ import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 
 export async function buildServer() {
   const server = Fastify({
-    logger: logger,
+    loggerInstance: logger,
+    ajv: {
+      customOptions: {
+        strict: false,
+      },
+    },
+  });
+
+  // Register shared schemas referenced via $ref in route definitions
+  server.addSchema({
+    $id: "Error",
+    type: "object",
+    properties: {
+      error: { type: "string" },
+      message: { type: "string" },
+      statusCode: { type: "number" },
+    },
+  });
+  server.addSchema({
+    $id: "HealthScore",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "AlertRule",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "Watchlist",
+    type: "object",
+    additionalProperties: true,
   });
 
   // Register tracing middleware first (to capture all requests)
@@ -44,29 +75,6 @@ export async function buildServer() {
 
   // Register routes
   await registerRoutes(server as any);
-
-  // Health check
-  server.get(
-    "/health",
-    {
-      schema: {
-        tags: ["Health"],
-        summary: "Service health check",
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              status: { type: "string", example: "ok" },
-              timestamp: { type: "string", format: "date-time" },
-            },
-          },
-        },
-      },
-    },
-    async () => {
-      return { status: "ok", timestamp: new Date().toISOString() };
-    },
-  );
 
   // Rate-limit metrics (internal monitoring endpoint)
   server.get(

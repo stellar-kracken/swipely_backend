@@ -22,6 +22,37 @@ vi.mock("ioredis", () => {
       type = vi.fn().mockResolvedValue("none");
       mget = vi.fn().mockResolvedValue([]);
       mset = vi.fn().mockResolvedValue("OK");
+      hgetall = vi.fn().mockResolvedValue({});
+      hset = vi.fn().mockResolvedValue(0);
+      hget = vi.fn().mockResolvedValue(null);
+      hdel = vi.fn().mockResolvedValue(0);
+      info = vi.fn().mockResolvedValue("used_memory:1000\r\nconnected_clients:1\r\n");
+      zcard = vi.fn().mockResolvedValue(0);
+      zadd = vi.fn().mockResolvedValue(0);
+      zrange = vi.fn().mockResolvedValue([]);
+      zrangebyscore = vi.fn().mockResolvedValue([]);
+      zremrangebyscore = vi.fn().mockResolvedValue(0);
+      pexpire = vi.fn().mockResolvedValue(1);
+      setex = vi.fn().mockResolvedValue("OK");
+      publish = vi.fn().mockResolvedValue(0);
+      subscribe = vi.fn().mockResolvedValue(null);
+      unsubscribe = vi.fn().mockResolvedValue(null);
+      flushdb = vi.fn().mockResolvedValue("OK");
+      flushall = vi.fn().mockResolvedValue("OK");
+      pipeline = vi.fn().mockReturnValue({
+        exec: vi.fn().mockResolvedValue([]),
+        zadd: vi.fn().mockReturnThis(),
+        zremrangebyscore: vi.fn().mockReturnThis(),
+        expire: vi.fn().mockReturnThis(),
+        zcard: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        get: vi.fn().mockReturnThis(),
+        del: vi.fn().mockReturnThis(),
+        incr: vi.fn().mockReturnThis(),
+        incrby: vi.fn().mockReturnThis(),
+        pexpire: vi.fn().mockReturnThis(),
+        setex: vi.fn().mockReturnThis(),
+      });
     }
   };
 });
