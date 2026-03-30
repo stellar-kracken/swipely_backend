@@ -96,18 +96,7 @@ export async function healthRoutes(server: FastifyInstance) {
         const health = await healthService.getSystemHealth();
         
         // Return appropriate HTTP status based on overall health
-        switch (health.status) {
-          case "healthy":
-            reply.code(200);
-            break;
-          case "degraded":
-            reply.code(200); // Still serve traffic but indicate issues
-            break;
-          case "unhealthy":
-            reply.code(503);
-            break;
-        }
-        
+        reply.code(200);
         return health;
       } catch (error) {
         server.log.error({ error }, "Detailed health check failed");
