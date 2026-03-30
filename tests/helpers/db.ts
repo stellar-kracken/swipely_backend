@@ -1,3 +1,4 @@
+import "tsx/cjs";
 import type { Knex } from "knex";
 
 export async function runMigrations(db: Knex): Promise<void> {
