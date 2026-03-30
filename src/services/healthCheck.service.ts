@@ -1,7 +1,9 @@
 import { logger } from "../utils/logger.js";
-import { getConnection } from "../database/connection.js";
+import { getDatabase } from "../database/connection.js";
 import Redis from "ioredis";
 import { config } from "../config/index.js";
+import os from "os";
+import fs from "fs";
 
 export interface HealthCheckResult {
   status: "healthy" | "unhealthy" | "degraded";
@@ -53,9 +55,9 @@ export class HealthCheckService {
       host: config.REDIS_HOST,
       port: config.REDIS_PORT,
       password: config.REDIS_PASSWORD || undefined,
-      retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
       lazyConnect: true,
+      retryStrategy: (times: number) => Math.min(times * 100, 2_000),
     });
   }
 
@@ -63,7 +65,6 @@ export class HealthCheckService {
    * Overall system health check
    */
   async getSystemHealth(): Promise<SystemHealthResponse> {
-    const startTime = Date.now();
     logger.info("Performing comprehensive system health check");
 
     const checks = await Promise.allSettled([
@@ -157,7 +158,7 @@ export class HealthCheckService {
     const startTime = Date.now();
 
     try {
-      const connection = getConnection();
+      const connection = getDatabase();
       await connection.raw("SELECT 1");
 
       // Check table count
@@ -280,17 +281,15 @@ export class HealthCheckService {
    */
   private async checkSystemResources(): Promise<HealthCheckResult> {
     const startTime = Date.now();
-
     try {
       const memUsage = process.memoryUsage();
-      const totalMemory = require("os").totalmem();
-      const freeMemory = require("os").freemem();
+      const totalMemory = os.totalmem();
+      const freeMemory = os.freemem();
       const usedMemory = totalMemory - freeMemory;
       const memoryUsagePercent = (usedMemory / totalMemory) * 100;
 
       // Get disk usage (simplified check)
-      const fs = require("fs");
-      const stats = fs.statSync(".");
+      fs.statSync(".");
       
       // Memory thresholds
       const memoryThreshold = 90; // 90% memory usage warning

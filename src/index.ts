@@ -6,6 +6,9 @@ import swaggerUi from "@fastify/swagger-ui";
 import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
+import { registerTracing } from "./api/middleware/tracing.js";
+import { registerValidation } from "./api/middleware/validation.js";
+import { registerMetrics } from "./api/middleware/metrics.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
 import {
   registerRateLimiting,
@@ -21,7 +24,38 @@ import { registerMetricsEndpoint } from "./api/routes/metrics.js";
 
 export async function buildServer() {
   const server = Fastify({
-    logger: logger,
+    loggerInstance: logger,
+    ajv: {
+      customOptions: {
+        strict: false,
+      },
+    },
+  });
+
+  // Register shared schemas referenced via $ref in route definitions
+  server.addSchema({
+    $id: "Error",
+    type: "object",
+    properties: {
+      error: { type: "string" },
+      message: { type: "string" },
+      statusCode: { type: "number" },
+    },
+  });
+  server.addSchema({
+    $id: "HealthScore",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "AlertRule",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "Watchlist",
+    type: "object",
+    additionalProperties: true,
   });
 
   // Register correlation middleware first (to capture trace context for all requests)
@@ -29,6 +63,9 @@ export async function buildServer() {
 
   // Register request/response logging middleware
   await registerRequestLoggingMiddleware(server as any);
+
+  // Register metrics middleware (to capture all requests)
+  await registerMetrics(server as any);
 
   // Register plugins
   await server.register(cors, {
@@ -43,7 +80,15 @@ export async function buildServer() {
   // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
   await registerRateLimiting(server as any);
 
-  await server.register(websocket);
+  // Data validation middleware
+  await registerValidation(server as any);
+
+  // Enable permessage-deflate compression for WebSocket frames.
+  await server.register(websocket, {
+    options: {
+      perMessageDeflate: true,
+    },
+  });
 
   // Register routes
   await registerRoutes(server as any);
@@ -53,7 +98,6 @@ export async function buildServer() {
 
   // Register Prometheus metrics endpoint
   await registerMetricsEndpoint(server as any);
-
   // Rate-limit metrics (internal monitoring endpoint)
   server.get(
     "/api/v1/metrics/rate-limits",
@@ -92,21 +136,23 @@ async function start() {
 
     // Initialize background jobs
     await initJobSystem();
-
-    // Graceful shutdown
-    const shutdown = async () => {
-      logger.info("Closing server...");
-      await server.close();
-      await JobQueue.getInstance().stop();
-      process.exit(0);
-    };
-
-    process.on("SIGTERM", shutdown);
-    process.on("SIGINT", shutdown);
   } catch (err) {
     server.log.error(err);
     process.exit(1);
   }
+
+  // ─── Graceful shutdown ──────────────────────────────────────────────────────
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, "Shutdown signal received");
+
+    await server.close();
+    await JobQueue.getInstance().stop();
+    logger.info("Server closed");
+    process.exit(0);
+  };
+
+  process.once("SIGTERM", () => { shutdown("SIGTERM").catch(() => process.exit(1)); });
+  process.once("SIGINT",  () => { shutdown("SIGINT").catch(() => process.exit(1)); });
 }
 
 if (process.env.NODE_ENV !== "test") {

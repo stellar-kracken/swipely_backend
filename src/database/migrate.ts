@@ -64,13 +64,13 @@ async function main(): Promise<void> {
   // process.argv layout: [node, script, command?, ...args]
   const [, , rawCommand, ...args] = process.argv;
 
-  // Default command when script is run with no arguments
-  const command = (rawCommand ?? "up") as Command;
-
-  if (command === "--help" || command === "-h") {
+  if (rawCommand === "--help" || rawCommand === "-h") {
     printHelp();
     process.exit(0);
   }
+
+  // Default command when script is run with no arguments
+  const command = (rawCommand ?? "up") as Command;
 
   const migrator = new Migrator();
 

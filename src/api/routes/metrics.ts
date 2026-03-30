@@ -1,71 +1,139 @@
-import { FastifyInstance } from 'fastify';
-import { getMetricsService } from '../../utils/metrics.js';
-import * as os from 'os';
+import type { FastifyInstance } from "fastify";
+import { getMetricsService } from "../../services/metrics.service.js";
+import { authMiddleware } from "../middleware/auth.js";
 
-export function formatPrometheusMetrics(metrics: Record<string, any>): string {
-  let output = '';
-
-  // Add process metrics
-  const uptime = process.uptime();
-  const memUsage = process.memoryUsage();
-
-  output += '# HELP process_uptime_seconds Process uptime in seconds\n';
-  output += '# TYPE process_uptime_seconds gauge\n';
-  output += `process_uptime_seconds ${uptime}\n\n`;
-
-  output += '# HELP process_resident_memory_bytes Resident memory in bytes\n';
-  output += '# TYPE process_resident_memory_bytes gauge\n';
-  output += `process_resident_memory_bytes ${memUsage.rss}\n\n`;
-
-  output += '# HELP process_virtual_memory_bytes Virtual memory in bytes\n';
-  output += '# TYPE process_virtual_memory_bytes gauge\n';
-  output += `process_virtual_memory_bytes ${memUsage.heapTotal}\n\n`;
-
-  output += '# HELP process_cpu_seconds_total CPU time in seconds\n';
-  output += '# TYPE process_cpu_seconds_total counter\n';
-  output += `process_cpu_seconds_total ${process.cpuUsage().user / 1000000}\n\n`;
-
-  // Add application metrics
-  Object.entries(metrics).forEach(([metricName, values]: [string, any]) => {
-    if (!Array.isArray(values) || values.length === 0) return;
-
-    const firstValue = values[0];
-    const metricType = firstValue.type || 'gauge';
-    const help = firstValue.help || `${metricName} metric`;
-
-    output += `# HELP ${metricName} ${help}\n`;
-    output += `# TYPE ${metricName} ${metricType}\n`;
-
-    values.forEach((metric: any) => {
-      const labels = metric.labels
-        ? Object.entries(metric.labels)
-            .map(([k, v]) => `${k}="${v}"`)
-            .join(',')
-        : '';
-
-      const labelStr = labels ? `{${labels}}` : '';
-      output += `${metricName}${labelStr} ${metric.value}\n`;
-    });
-
-    output += '\n';
-  });
-
-  return output;
-}
-
-export async function registerMetricsEndpoint(
-  server: FastifyInstance
-): Promise<void> {
+/**
+ * Metrics Routes
+ * Exposes Prometheus-compatible metrics endpoint
+ */
+export async function metricsRoutes(server: FastifyInstance) {
   const metricsService = getMetricsService();
 
-  server.get('/metrics', async (request, reply) => {
-    try {
-      const metricsJson = await metricsService.getMetricsJSON();
-      const prometheusFormat = formatPrometheusMetrics(metricsJson);
-
-      reply.type('text/plain; version=0.0.4').send(prometheusFormat);
-    } catch (error) {
-      reply.code(500).send({ error: 'Failed to retrieve metrics' });
+  /**
+   * GET /metrics
+   * Returns metrics in Prometheus text format
+   */
+  server.get(
+    "/",
+    {
+      schema: {
+        tags: ["Metrics"],
+        summary: "Get application metrics in Prometheus format",
+        description: "Returns all application metrics in Prometheus exposition format for scraping",
+        response: {
+          200: {
+            type: "string",
+            description: "Metrics in Prometheus text format",
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const metrics = await metricsService.getMetrics();
+      reply.type("text/plain; version=0.0.4; charset=utf-8");
+      return metrics;
     }
-  });
+  );
+
+  /**
+   * GET /metrics/json
+   * Returns metrics in JSON format (for debugging)
+   */
+  server.get(
+    "/json",
+    {
+      schema: {
+        tags: ["Metrics"],
+        summary: "Get application metrics in JSON format",
+        description: "Returns all application metrics in JSON format for debugging and inspection",
+        response: {
+          200: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                help: { type: "string" },
+                type: { type: "string" },
+                values: { type: "array" },
+                aggregator: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const metrics = await metricsService.getMetricsJSON();
+      return metrics;
+    }
+  );
+
+  /**
+   * GET /metrics/health
+   * Returns health status of metrics collection
+   */
+  server.get(
+    "/health",
+    {
+      schema: {
+        tags: ["Metrics"],
+        summary: "Metrics system health check",
+        description: "Returns the health status of the metrics collection system",
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", example: "healthy" },
+              metricsCount: { type: "number" },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const metrics = await metricsService.getMetricsJSON();
+      return {
+        status: "healthy",
+        metricsCount: metrics.length,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  );
+
+  /**
+   * POST /metrics/reset
+   * Reset all metrics (admin only, useful for testing)
+   */
+  server.post(
+    "/reset",
+    {
+      preHandler: authMiddleware({ requiredScopes: ["admin"] }),
+      schema: {
+        tags: ["Metrics"],
+        summary: "Reset all metrics",
+        description: "Resets all collected metrics to zero (admin only)",
+        security: [{ ApiKeyAuth: [] }],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              message: { type: "string" },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      metricsService.reset();
+      return {
+        success: true,
+        message: "All metrics have been reset",
+        timestamp: new Date().toISOString(),
+      };
+    }
+  );
 }
