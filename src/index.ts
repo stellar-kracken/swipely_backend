@@ -79,7 +79,12 @@ export async function buildServer() {
   // Data validation middleware
   await registerValidation(server as any);
 
-  await server.register(websocket);
+  // Enable permessage-deflate compression for WebSocket frames.
+  await server.register(websocket, {
+    options: {
+      perMessageDeflate: true,
+    },
+  });
 
   // Register routes
   await registerRoutes(server as any);
@@ -122,21 +127,23 @@ async function start() {
 
     // Initialize background jobs
     await initJobSystem();
-
-    // Graceful shutdown
-    const shutdown = async () => {
-      logger.info("Closing server...");
-      await server.close();
-      await JobQueue.getInstance().stop();
-      process.exit(0);
-    };
-
-    process.on("SIGTERM", shutdown);
-    process.on("SIGINT", shutdown);
   } catch (err) {
     server.log.error(err);
     process.exit(1);
   }
+
+  // ─── Graceful shutdown ──────────────────────────────────────────────────────
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, "Shutdown signal received");
+
+    await server.close();
+    await JobQueue.getInstance().stop();
+    logger.info("Server closed");
+    process.exit(0);
+  };
+
+  process.once("SIGTERM", () => { shutdown("SIGTERM").catch(() => process.exit(1)); });
+  process.once("SIGINT",  () => { shutdown("SIGINT").catch(() => process.exit(1)); });
 }
 
 if (process.env.NODE_ENV !== "test") {
