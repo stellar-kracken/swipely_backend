@@ -4,12 +4,20 @@ import { db } from '../database/connection.js';
 import * as os from 'os';
 import * as fs from 'fs';
 
-let redis: any;
-try {
-  const redisModule = await import('../config/redis.js');
-  redis = redisModule.redis;
-} catch (error) {
-  logger.warn('Redis module not available');
+let redis: any = null;
+
+// Lazy load Redis to avoid import errors if not configured
+async function getRedis() {
+  if (redis === null) {
+    try {
+      const redisModule = await import('../config/redis.js');
+      redis = redisModule.redis;
+    } catch (error) {
+      logger.warn('Redis module not available');
+      redis = undefined;
+    }
+  }
+  return redis;
 }
 
 export interface HealthCheck {
@@ -84,14 +92,15 @@ export class HealthCheckService {
 
   private async checkRedis(): Promise<HealthCheck> {
     try {
-      if (!redis) {
+      const redisClient = await getRedis();
+      if (!redisClient) {
         return {
           status: 'degraded',
           message: 'Redis not configured',
         };
       }
       const start = Date.now();
-      await redis.ping();
+      await redisClient.ping();
       const responseTime = Date.now() - start;
 
       return {
