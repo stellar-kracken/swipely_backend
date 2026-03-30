@@ -15,8 +15,9 @@ const healthService = HealthCheckService.getInstance();
 
 export async function healthRoutes(server: FastifyInstance) {
   // Simple health check (backward compatibility)
+  // Using empty string instead of "/" to avoid route conflicts
   server.get(
-    "/",
+    "",
     async (_request: FastifyRequest, _reply: FastifyReply) => {
       return { 
         status: "ok", 
@@ -36,7 +37,7 @@ export async function healthRoutes(server: FastifyInstance) {
         const liveness = await healthService.getLiveness();
         
         // Return appropriate HTTP status for Kubernetes
-        if (liveness.status === "ok") {
+        if (liveness.status === "healthy") {
           reply.code(200);
         } else {
           reply.code(503);
@@ -47,9 +48,16 @@ export async function healthRoutes(server: FastifyInstance) {
         server.log.error({ error }, "Liveness probe failed");
         reply.code(503);
         return {
-          status: "error",
+          status: "unhealthy",
           timestamp: new Date().toISOString(),
-          error: error instanceof Error ? error.message : "Unknown error",
+          uptime: 0,
+          version: process.env.npm_package_version || "0.1.0",
+          checks: {
+            database: { status: "unhealthy", message: "Liveness check failed" },
+            redis: { status: "unhealthy", message: "Liveness check failed" },
+            memory: { status: "unhealthy", message: "Liveness check failed" },
+            disk: { status: "unhealthy", message: "Liveness check failed" },
+          },
         };
       }
     }
@@ -64,7 +72,7 @@ export async function healthRoutes(server: FastifyInstance) {
         const readiness = await healthService.getReadiness();
         
         // Return appropriate HTTP status for Kubernetes
-        if (readiness.status === "ready") {
+        if (readiness.status === "healthy") {
           reply.code(200);
         } else {
           reply.code(503);
@@ -75,13 +83,16 @@ export async function healthRoutes(server: FastifyInstance) {
         server.log.error({ error }, "Readiness probe failed");
         reply.code(503);
         return {
-          status: "not_ready",
+          status: "unhealthy",
           timestamp: new Date().toISOString(),
+          uptime: 0,
+          version: process.env.npm_package_version || "0.1.0",
           checks: {
-            database: false,
-            redis: false,
+            database: { status: "unhealthy", message: "Readiness check failed" },
+            redis: { status: "unhealthy", message: "Readiness check failed" },
+            memory: { status: "unhealthy", message: "Readiness check failed" },
+            disk: { status: "unhealthy", message: "Readiness check failed" },
           },
-          error: error instanceof Error ? error.message : "Unknown error",
         };
       }
     }
