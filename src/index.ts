@@ -23,7 +23,7 @@ import { metricsRoutes } from "./api/routes/metrics.js";
 
 export async function buildServer() {
   const server = Fastify({
-    loggerInstance: logger,
+    logger: logger,
     ajv: {
       customOptions: {
         strict: false,
