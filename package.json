@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "test:unit": "vitest run tests/{api,services,workers,jobs}/**/*.test.ts",
+    "test:unit": "vitest run tests/api tests/services tests/workers tests/jobs",
     "test:integration": "vitest run tests/integration/**/*.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
