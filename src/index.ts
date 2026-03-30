@@ -19,6 +19,7 @@ import {
 } from "./api/middleware/rateLimit.middleware.js";
 import { initJobSystem } from "./workers/index.js";
 import { JobQueue } from "./workers/queue.js";
+import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 
 export async function buildServer() {
@@ -138,6 +139,7 @@ async function start() {
 
     await server.close();
     await JobQueue.getInstance().stop();
+    await getSupplyVerificationQueue().stop();
     logger.info("Server closed");
     process.exit(0);
   };
