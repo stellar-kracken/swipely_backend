@@ -14,14 +14,21 @@ import {
 import { initJobSystem } from "./workers/index.js";
 import { JobQueue } from "./workers/queue.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
+import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
+import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
+import { registerHealthCheckRoutes } from "./services/health-check.service.js";
+import { registerMetricsEndpoint } from "./api/routes/metrics.js";
 
 export async function buildServer() {
   const server = Fastify({
     logger: logger,
   });
 
-  // Register tracing middleware first (to capture all requests)
-  await registerTracing(server as any);
+  // Register correlation middleware first (to capture trace context for all requests)
+  await registerCorrelationMiddleware(server as any);
+
+  // Register request/response logging middleware
+  await registerRequestLoggingMiddleware(server as any);
 
   // Register plugins
   await server.register(cors, {
@@ -36,36 +43,16 @@ export async function buildServer() {
   // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
   await registerRateLimiting(server as any);
 
-  // Data validation middleware
-  await registerValidation(server as any);
-
   await server.register(websocket);
 
   // Register routes
   await registerRoutes(server as any);
 
-  // Health check
-  server.get(
-    "/health",
-    {
-      schema: {
-        tags: ["Health"],
-        summary: "Service health check",
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              status: { type: "string", example: "ok" },
-              timestamp: { type: "string", format: "date-time" },
-            },
-          },
-        },
-      },
-    },
-    async () => {
-      return { status: "ok", timestamp: new Date().toISOString() };
-    },
-  );
+  // Register health check endpoints
+  await registerHealthCheckRoutes(server as any);
+
+  // Register Prometheus metrics endpoint
+  await registerMetricsEndpoint(server as any);
 
   // Rate-limit metrics (internal monitoring endpoint)
   server.get(

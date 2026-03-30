@@ -1,9 +1,16 @@
 import { FastifyInstance } from 'fastify';
 import { logger } from '../utils/logger.js';
 import { db } from '../database/connection.js';
-import { redis } from '../config/redis.js';
 import * as os from 'os';
 import * as fs from 'fs';
+
+let redis: any;
+try {
+  const redisModule = await import('../config/redis.js');
+  redis = redisModule.redis;
+} catch (error) {
+  logger.warn('Redis module not available');
+}
 
 export interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -77,6 +84,12 @@ export class HealthCheckService {
 
   private async checkRedis(): Promise<HealthCheck> {
     try {
+      if (!redis) {
+        return {
+          status: 'degraded',
+          message: 'Redis not configured',
+        };
+      }
       const start = Date.now();
       await redis.ping();
       const responseTime = Date.now() - start;
