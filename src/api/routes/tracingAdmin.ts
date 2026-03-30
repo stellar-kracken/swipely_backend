@@ -9,7 +9,10 @@ const traceManager = TraceManager.getInstance();
 const tracingLogger = createChildLogger('tracing-admin');
 
 function getActiveTraceEntries(): Array<[string, any]> {
-  const activeTraces = (traceManager as any).activeTraces as Map<string, any>;
+  const activeTraces = (traceManager as any).activeTraces as Map<string, any> | undefined;
+  if (!activeTraces || typeof (activeTraces as any).entries !== "function") {
+    return [];
+  }
   return Array.from(activeTraces.entries());
 }
 
@@ -420,8 +423,9 @@ export async function tracingAdminRoutes(server: FastifyInstance) {
     "/health",
     async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const activeTracesCount = (traceManager as any).activeTraces.size;
-        const metricsCount = performanceMonitor.getMetrics().length;
+        const activeTraces = (traceManager as any).activeTraces as Map<string, any> | undefined;
+        const activeTracesCount = activeTraces?.size ?? 0;
+        const metricsCount = performanceMonitor.getMetrics().length ?? 0;
 
         return {
           success: true,

@@ -4,6 +4,10 @@ export async function runMigrations(db: Knex): Promise<void> {
   await db.migrate.latest({
     directory: "./src/database/migrations",
     extension: "ts",
+    // Disable transaction wrapping so a failed TimescaleDB call (e.g.
+    // create_hypertable inside a try/catch) cannot abort the entire batch
+    // and roll back tables from earlier migrations.
+    disableTransactions: true,
   });
 }
 
@@ -12,6 +16,7 @@ export async function rollbackAll(db: Knex): Promise<void> {
     {
       directory: "./src/database/migrations",
       extension: "ts",
+      disableTransactions: true,
     },
     true
   );
