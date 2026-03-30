@@ -8,7 +8,6 @@ import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
 import { registerTracing } from "./api/middleware/tracing.js";
 import { registerValidation } from "./api/middleware/validation.js";
-import { startBridgeVerificationJob } from "./jobs/verification.job.js";
 import { wsServer } from "./api/websocket/websocket.server.js";
 import {
   registerRateLimiting,
@@ -20,11 +19,45 @@ import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 
 export async function buildServer() {
   const server = Fastify({
-    logger: logger,
+    loggerInstance: logger,
+    ajv: {
+      customOptions: {
+        strict: false,
+      },
+    },
+  });
+
+  // Register shared schemas referenced via $ref in route definitions
+  server.addSchema({
+    $id: "Error",
+    type: "object",
+    properties: {
+      error: { type: "string" },
+      message: { type: "string" },
+      statusCode: { type: "number" },
+    },
+  });
+  server.addSchema({
+    $id: "HealthScore",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "AlertRule",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "Watchlist",
+    type: "object",
+    additionalProperties: true,
   });
 
   // Register tracing middleware first (to capture all requests)
   await registerTracing(server as any);
+
+  // Register metrics middleware (to capture all requests)
+  await registerMetrics(server as any);
 
   // Register plugins
   await server.register(cors, {
@@ -48,29 +81,6 @@ export async function buildServer() {
 
   // Register routes
   await registerRoutes(server as any);
-
-  // Health check
-  server.get(
-    "/health",
-    {
-      schema: {
-        tags: ["Health"],
-        summary: "Service health check",
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              status: { type: "string", example: "ok" },
-              timestamp: { type: "string", format: "date-time" },
-            },
-          },
-        },
-      },
-    },
-    async () => {
-      return { status: "ok", timestamp: new Date().toISOString() };
-    },
-  );
 
   // Rate-limit metrics (internal monitoring endpoint)
   server.get(
