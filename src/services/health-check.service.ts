@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { logger } from '../utils/logger.js';
-import { db } from '../database/connection.js';
+import { getDatabase } from '../database/connection.js';
 import * as os from 'os';
 import * as fs from 'fs';
 
@@ -11,7 +11,7 @@ async function getRedis() {
   if (redis === null) {
     try {
       const redisModule = await import('../config/redis.js');
-      redis = redisModule.redis;
+      redis = redisModule.createRedisClient();
     } catch (error) {
       logger.warn('Redis module not available');
       redis = undefined;
@@ -68,7 +68,8 @@ export class HealthCheckService {
   private async checkDatabase(): Promise<HealthCheck> {
     try {
       const start = Date.now();
-      await db.query('SELECT 1');
+      const database = getDatabase();
+      await database.raw('SELECT 1');
       const responseTime = Date.now() - start;
 
       return {

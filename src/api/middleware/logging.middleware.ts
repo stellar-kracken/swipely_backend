@@ -97,15 +97,17 @@ export async function registerRequestLoggingMiddleware(
         slowThreshold: SLOW_REQUEST_THRESHOLD_MS,
       };
 
-      if (shouldLogResponseBody(request.url)) {
-        responseLogEntry.responseBody = reply.payload;
-      }
+      // Note: Response body logging is not available in Fastify onResponse hook
+      // as the response has already been sent to the client
 
       const logLevel = isSlow ? 'warn' : reply.statusCode >= 400 ? 'error' : 'info';
-      logger[logLevel as keyof typeof logger](
-        responseLogEntry,
-        `${request.method} ${request.url} - ${reply.statusCode} (${duration}ms)`
-      );
+      if (logLevel === 'warn') {
+        logger.warn(responseLogEntry, `${request.method} ${request.url} - ${reply.statusCode} (${duration}ms)`);
+      } else if (logLevel === 'error') {
+        logger.error(responseLogEntry, `${request.method} ${request.url} - ${reply.statusCode} (${duration}ms)`);
+      } else {
+        logger.info(responseLogEntry, `${request.method} ${request.url} - ${reply.statusCode} (${duration}ms)`);
+      }
     } catch (error) {
       logger.warn({ error }, 'Failed to log response');
     }
