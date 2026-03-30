@@ -70,33 +70,9 @@ export function shouldLogResponseBody(path: string): boolean {
 export async function registerRequestLoggingMiddleware(
   server: FastifyInstance
 ): Promise<void> {
-  // Log incoming requests
+  // Store request start time for duration calculation
   server.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const traceContext = (request as any).traceContext;
-      const correlationId = traceContext?.correlationId || 'unknown';
-
-      const requestLogEntry: RequestLogEntry = {
-        timestamp: new Date().toISOString(),
-        correlationId,
-        method: request.method,
-        path: request.url,
-        query: request.query,
-        headers: redactHeaders(request.headers as Record<string, string>),
-        requestSize: request.headers['content-length']
-          ? parseInt(request.headers['content-length'] as string, 10)
-          : undefined,
-        clientIp: request.ip || 'unknown',
-      };
-
-      if (shouldLogRequestBody(request.url)) {
-        requestLogEntry.requestBody = request.body;
-      }
-
-      logger.info(requestLogEntry, `${request.method} ${request.url}`);
-    } catch (error) {
-      logger.warn({ error }, 'Failed to log request');
-    }
+    (request as any).startTime = Date.now();
   });
 
   // Log responses and calculate duration
@@ -104,7 +80,7 @@ export async function registerRequestLoggingMiddleware(
     try {
       const traceContext = (request as any).traceContext;
       const correlationId = traceContext?.correlationId || 'unknown';
-      const startTime = request.startTime || Date.now();
+      const startTime = (request as any).startTime || Date.now();
       const duration = Date.now() - startTime;
       const isSlow = duration > SLOW_REQUEST_THRESHOLD_MS;
 

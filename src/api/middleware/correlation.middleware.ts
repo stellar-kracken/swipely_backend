@@ -23,8 +23,28 @@ export interface TraceContext {
 class TraceManager {
   private static instance: TraceManager;
   private traceContextMap: Map<string, TraceContext> = new Map();
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private readonly MAX_CONTEXT_AGE_MS = 5 * 60 * 1000; // 5 minutes
 
-  private constructor() {}
+  private constructor() {
+    this.startCleanupInterval();
+  }
+
+  private startCleanupInterval(): void {
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const keysToDelete: string[] = [];
+
+      this.traceContextMap.forEach((context, key) => {
+        const contextAge = now - new Date(context.timestamp).getTime();
+        if (contextAge > this.MAX_CONTEXT_AGE_MS) {
+          keysToDelete.push(key);
+        }
+      });
+
+      keysToDelete.forEach((key) => this.traceContextMap.delete(key));
+    }, 60000); // Run cleanup every minute
+  }
 
   static getInstance(): TraceManager {
     if (!TraceManager.instance) {
@@ -96,6 +116,13 @@ class TraceManager {
     const context = this.traceContextMap.get(requestId);
     this.traceContextMap.delete(requestId);
     return context;
+  }
+
+  stopCleanup(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 
   propagateTraceContext(

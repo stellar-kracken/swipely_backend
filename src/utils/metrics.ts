@@ -1,4 +1,5 @@
 import { logger } from './logger.js';
+import { config } from '../config/index.js';
 
 export interface MetricValue {
   name: string;
