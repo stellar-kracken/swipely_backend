@@ -69,7 +69,9 @@ const SENSITIVE_PATTERNS = [
   /\b\d{3}-\d{3}-\d{4}\b/g,
   // Credit card numbers (basic pattern)
   /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
-  // API keys (alphanumeric with underscores)
+  // API keys with prefix (e.g. sk-*, pk-*, rk-*)
+  /\b(?:sk|pk|rk|ak|api|key)-[a-zA-Z0-9_-]{6,}\b/g,
+  // API keys (alphanumeric with underscores, 20+ chars)
   /\b[a-zA-Z0-9_]{20,}\b/g,
   // JWT tokens
   /eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g,
@@ -93,13 +95,16 @@ export function maskSensitiveData(data: any): any {
 
   if (typeof data === 'object') {
     if (data instanceof Error) {
+      // Strip all sensitive fields from Error objects entirely (not just mask them)
+      const safeEntries = Object.entries(data).filter(([key]) => {
+        const lowerKey = key.toLowerCase();
+        return !SENSITIVE_FIELDS.some(field => lowerKey.includes(field));
+      });
       return {
         name: data.name,
         message: data.message,
         stack: data.stack,
-        ...maskSensitiveData(Object.fromEntries(
-          Object.entries(data).filter(([key]) => !key.includes('password') && !key.includes('secret'))
-        )),
+        ...Object.fromEntries(safeEntries),
       };
     }
 
