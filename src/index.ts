@@ -20,7 +20,7 @@ import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
 import { registerHealthCheckRoutes } from "./services/health-check.service.js";
-import { registerMetricsEndpoint } from "./api/routes/metrics.js";
+import { metricsRoutes } from "./api/routes/metrics.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -97,7 +97,7 @@ export async function buildServer() {
   await registerHealthCheckRoutes(server as any);
 
   // Register Prometheus metrics endpoint
-  await registerMetricsEndpoint(server as any);
+  await metricsRoutes(server as any);
   // Rate-limit metrics (internal monitoring endpoint)
   server.get(
     "/api/v1/metrics/rate-limits",
