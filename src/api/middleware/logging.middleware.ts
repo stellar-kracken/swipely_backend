@@ -71,7 +71,7 @@ export async function registerRequestLoggingMiddleware(
   server: FastifyInstance
 ): Promise<void> {
   // Store request start time for duration calculation
-  server.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+  server.addHook('onRequest', async (request: FastifyRequest, _reply: FastifyReply) => {
     (request as any).startTime = Date.now();
   });
 

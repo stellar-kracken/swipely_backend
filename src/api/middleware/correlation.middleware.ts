@@ -174,7 +174,7 @@ export async function registerCorrelationMiddleware(
 ): Promise<void> {
   const traceManager = TraceManager.getInstance();
 
-  server.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+  server.addHook('onRequest', async (request: FastifyRequest, _reply: FastifyReply) => {
     try {
       const traceContext = traceManager.createTraceContext(request);
       logger.debug(

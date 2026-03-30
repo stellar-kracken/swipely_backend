@@ -63,7 +63,7 @@ export async function metricsRoutes(server: FastifyInstance) {
         },
       },
     },
-    async (request, reply) => {
+    async (_request, _reply) => {
       const metrics = await metricsService.getMetricsJSON();
       return metrics;
     }
@@ -92,7 +92,7 @@ export async function metricsRoutes(server: FastifyInstance) {
         },
       },
     },
-    async (request, reply) => {
+    async (_request, _reply) => {
       const metrics = await metricsService.getMetricsJSON();
       return {
         status: "healthy",
@@ -127,7 +127,7 @@ export async function metricsRoutes(server: FastifyInstance) {
         },
       },
     },
-    async (request, reply) => {
+    async (_request, _reply) => {
       metricsService.reset();
       return {
         success: true,

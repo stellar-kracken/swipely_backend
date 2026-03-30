@@ -51,11 +51,6 @@ const HEALTH_CHECK_DISK_THRESHOLD = parseInt(
   10
 );
 
-const HEALTH_CHECK_TIMEOUT_MS = parseInt(
-  process.env.HEALTH_CHECK_TIMEOUT_MS || '5000',
-  10
-);
-
 const startTime = Date.now();
 
 export class HealthCheckService {

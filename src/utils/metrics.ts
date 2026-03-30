@@ -1,5 +1,4 @@
 import { logger } from './logger.js';
-import { config } from '../config/index.js';
 
 export interface MetricValue {
   name: string;
@@ -41,8 +40,8 @@ class MetricsCollector {
     path: string,
     statusCode: number,
     duration: number,
-    requestSize?: number,
-    responseSize?: number
+    _requestSize?: number,
+    _responseSize?: number
   ): void {
     try {
       const key = `http_request_${method}_${path}`;
@@ -100,7 +99,7 @@ class MetricsCollector {
     operation: string,
     duration: number,
     success: boolean,
-    query?: string
+    _query?: string
   ): void {
     try {
       const key = `db_query_${operation}`;
@@ -267,7 +266,7 @@ class MetricsCollector {
     return sorted[Math.max(0, index)] || 0;
   }
 
-  getErrorRate(timeWindow?: number): number {
+  getErrorRate(_timeWindow?: number): number {
     let errorCount = 0;
     let totalCount = 0;
 
@@ -283,7 +282,7 @@ class MetricsCollector {
     return totalCount === 0 ? 0 : (errorCount / totalCount) * 100;
   }
 
-  getThroughput(timeWindow?: number): number {
+  getThroughput(_timeWindow?: number): number {
     let totalCount = 0;
     this.customMetrics.forEach((metric) => {
       if (metric.name === 'http_requests_total') {
@@ -296,11 +295,11 @@ class MetricsCollector {
   async getMetrics(): Promise<string> {
     const allMetrics: Record<string, MetricValue[]> = {};
 
-    this.metrics.forEach((values, key) => {
-      allMetrics[key] = values;
+    this.metrics.forEach((values, _key) => {
+      allMetrics[_key] = values;
     });
 
-    this.customMetrics.forEach((metric, key) => {
+    this.customMetrics.forEach((metric, _key) => {
       if (!allMetrics[metric.name]) {
         allMetrics[metric.name] = [];
       }
@@ -313,11 +312,11 @@ class MetricsCollector {
   async getMetricsJSON(): Promise<Record<string, any>> {
     const allMetrics: Record<string, MetricValue[]> = {};
 
-    this.metrics.forEach((values, key) => {
-      allMetrics[key] = values;
+    this.metrics.forEach((values, _key) => {
+      allMetrics[_key] = values;
     });
 
-    this.customMetrics.forEach((metric, key) => {
+    this.customMetrics.forEach((metric, _key) => {
       if (!allMetrics[metric.name]) {
         allMetrics[metric.name] = [];
       }
