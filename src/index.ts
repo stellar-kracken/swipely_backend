@@ -19,7 +19,6 @@ import { JobQueue } from "./workers/queue.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
-import { registerHealthCheckRoutes } from "./services/health-check.service.js";
 import { metricsRoutes } from "./api/routes/metrics.js";
 
 export async function buildServer() {
@@ -92,9 +91,6 @@ export async function buildServer() {
 
   // Register routes
   await registerRoutes(server as any);
-
-  // Register health check endpoints
-  await registerHealthCheckRoutes(server as any);
 
   // Register Prometheus metrics endpoint
   await metricsRoutes(server as any);
