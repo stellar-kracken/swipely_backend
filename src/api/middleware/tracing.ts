@@ -188,6 +188,14 @@ export class TraceManager {
     return context;
   }
 
+  listActiveTraces(): Array<[string, TraceContext]> {
+    return Array.from(this.activeTraces.entries());
+  }
+
+  countActiveTraces(): number {
+    return this.activeTraces.size;
+  }
+
   private generateId(): string {
     return randomUUID().replace(/-/g, '');
   }
@@ -383,6 +391,14 @@ export class TracedLogger {
         logger.fatal(logData);
         break;
     }
+
+    if (config.NODE_ENV === "test") {
+      if (entry.level === "error" || entry.level === "fatal") {
+        console.error(entry.message);
+      } else {
+        console.log(entry.message);
+      }
+    }
   }
 }
 
@@ -441,6 +457,15 @@ export async function registerTracing(server: FastifyInstance): Promise<void> {
       duration,
       responseSize: reply.raw.getHeader('content-length'),
     });
+
+    if (reply.statusCode >= 400) {
+      tracedLogger.error('Request error', traceContext.requestId, undefined, {
+        method: request.method,
+        url: request.url,
+        statusCode: reply.statusCode,
+        duration,
+      });
+    }
 
     // Performance logging for slow requests
     if (duration > config.REQUEST_SLOW_THRESHOLD_MS) {
