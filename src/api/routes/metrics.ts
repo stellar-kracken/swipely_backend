@@ -28,7 +28,7 @@ export async function metricsRoutes(server: FastifyInstance) {
         },
       },
     },
-    async (request, reply) => {
+    async (_request, reply) => {
       const metrics = await metricsService.getMetrics();
       reply.type("text/plain; version=0.0.4; charset=utf-8");
       return metrics;
