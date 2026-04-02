@@ -129,8 +129,8 @@ export class ExportService {
       db("export_history").where({ requested_by: userId }).count("* as count").first(),
     ]);
 
-    const total = typeof countResult?.count === "number" 
-      ? countResult.count 
+    const total = typeof countResult?.count === "number"
+      ? countResult.count
       : parseInt(String(countResult?.count || "0"), 10);
 
     return {
@@ -220,7 +220,7 @@ export class ExportService {
     }
 
     // Delete database record
-    await db("export_history").where({ id: exportId }).delete();
+    await db("export_history").where({ id: exportId }).del();
 
     logger.info({ exportId }, "Export record deleted");
   }
