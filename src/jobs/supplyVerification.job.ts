@@ -170,9 +170,9 @@ export class SupplyVerificationQueue {
     priority: "normal" | "high" = "normal"
   ): Promise<Job<SupplyVerificationJobData>> {
     const jobPriority = priority === "high" ? JOB_PRIORITY_HIGH : JOB_PRIORITY_NORMAL;
-    
+
     logger.info({ assetCode, priority }, "Adding supply verification job");
-    
+
     return this.queue.add(
       "verify-supply",
       { assetCode, priority, isBatch: false },
@@ -187,15 +187,15 @@ export class SupplyVerificationQueue {
    */
   public async addBatchVerificationJobs(): Promise<Job<SupplyVerificationJobData>[]> {
     const jobs: Job<SupplyVerificationJobData>[] = [];
-    
+
     logger.info({ assetCount: SUPPORTED_ASSETS.length }, "Adding batch supply verification jobs");
-    
+
     for (const asset of SUPPORTED_ASSETS) {
       // Skip native assets that don't have cross-chain supply verification
       if (asset.code === "XLM" || asset.code === "native") {
         continue;
       }
-      
+
       const job = await this.queue.add(
         "verify-supply",
         { assetCode: asset.code, priority: "normal", isBatch: true },
@@ -203,7 +203,7 @@ export class SupplyVerificationQueue {
       );
       jobs.push(job);
     }
-    
+
     return jobs;
   }
 
@@ -214,7 +214,7 @@ export class SupplyVerificationQueue {
    */
   public async schedulePeriodicVerification(cronPattern = "*/5 * * * *"): Promise<void> {
     logger.info({ cronPattern }, "Scheduling periodic supply verification");
-    
+
     await this.queue.add(
       "verify-supply-batch",
       { isBatch: true },
@@ -241,18 +241,18 @@ export class SupplyVerificationQueue {
       QUEUE_NAME,
       async (job: Job<SupplyVerificationJobData>) => {
         const startTime = Date.now();
-        
+
         try {
           // Handle batch job (verify all assets)
           if (job.name === "verify-supply-batch") {
             return await this.processBatchJob(job, startTime);
           }
-          
+
           // Handle single asset verification
           if (job.name === "verify-supply" && job.data.assetCode) {
             return await this.processSingleJob(job, startTime);
           }
-          
+
           throw new Error(`Unknown job type: ${job.name}`);
         } catch (error) {
           // Record failure metrics
@@ -276,12 +276,12 @@ export class SupplyVerificationQueue {
     // Worker event handlers
     this.worker.on("completed", (job: Job<SupplyVerificationJobData>, result: SupplyVerificationJobResult) => {
       const duration = (Date.now() - (job.processedOn || 0)) / 1000;
-      
+
       logger.info(
         { jobId: job.id, assetCode: job.data?.assetCode, duration: `${duration}s` },
         "Supply verification job completed"
       );
-      
+
       // Record success metrics
       this.metricsService.recordQueueJob(
         QUEUE_NAME,
@@ -293,12 +293,12 @@ export class SupplyVerificationQueue {
 
     this.worker.on("failed", async (job: Job<SupplyVerificationJobData> | undefined, error: Error) => {
       const duration = job ? (Date.now() - (job.processedOn || 0)) / 1000 : 0;
-      
+
       logger.error(
         { jobId: job?.id, assetCode: job?.data?.assetCode, error: error.message, attempts: job?.attemptsMade },
         "Supply verification job failed"
       );
-      
+
       // Record failure metrics
       this.metricsService.recordQueueJob(
         QUEUE_NAME,
@@ -307,7 +307,7 @@ export class SupplyVerificationQueue {
         false,
         error.message
       );
-      
+
       // Trigger alert if max retries exceeded
       if (job && job.attemptsMade >= DEFAULT_MAX_ATTEMPTS) {
         await this.triggerFailureAlert(job, error);
@@ -332,13 +332,13 @@ export class SupplyVerificationQueue {
     startTime: number
   ): Promise<SupplyVerificationJobResult> {
     const { assetCode } = job.data;
-    
+
     logger.info({ jobId: job.id, assetCode, attempt: job.attemptsMade }, "Processing supply verification job");
-    
+
     try {
       // Fetch and verify supply data
       const result = await this.bridgeService.verifySupply(assetCode);
-      
+
       // Persist result to database
       await this.persistResult({
         assetCode,
@@ -350,14 +350,14 @@ export class SupplyVerificationQueue {
         verifiedAt: new Date(),
         jobId: job.id,
       });
-      
+
       // Check for critical supply mismatch and trigger alert
       if (result.isFlagged) {
         await this.triggerSupplyMismatchAlert(assetCode, result);
       }
-      
+
       const duration = (Date.now() - startTime) / 1000;
-      
+
       return {
         success: true,
         assetCode,
@@ -375,12 +375,12 @@ export class SupplyVerificationQueue {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       logger.error(
         { jobId: job.id, assetCode, error: errorMessage },
         "Supply verification failed"
       );
-      
+
       // Persist failure result
       await this.persistResult({
         assetCode,
@@ -392,7 +392,7 @@ export class SupplyVerificationQueue {
         verifiedAt: new Date(),
         jobId: job.id,
       });
-      
+
       throw error; // Re-throw for BullMQ retry handling
     }
   }
@@ -405,15 +405,15 @@ export class SupplyVerificationQueue {
     startTime: number
   ): Promise<SupplyVerificationJobResult[]> {
     logger.info({ jobId: job.id }, "Processing batch supply verification");
-    
+
     const results: SupplyVerificationJobResult[] = [];
-    
+
     // Create individual jobs for each asset (parallel processing via queue concurrency)
     for (const asset of SUPPORTED_ASSETS) {
       if (asset.code === "XLM" || asset.code === "native") {
         continue;
       }
-      
+
       try {
         const result = await this.processSingleJob(
           { ...job, data: { assetCode: asset.code, priority: "normal", isBatch: false } } as Job<SupplyVerificationJobData>,
@@ -430,12 +430,12 @@ export class SupplyVerificationQueue {
         });
       }
     }
-    
+
     logger.info(
       { jobId: job.id, total: results.length, success: results.filter(r => r.success).length },
       "Batch supply verification completed"
     );
-    
+
     return results;
   }
 
@@ -445,14 +445,14 @@ export class SupplyVerificationQueue {
   private async persistResult(result: SupplyVerificationResult): Promise<void> {
     try {
       const db = getDatabase();
-      
+
       // Get bridge operator ID for the asset (or use a default)
       const bridgeOperator = await db("bridge_operators")
         .where({ asset_code: result.assetCode, is_active: true })
         .first();
-      
+
       const bridgeId = bridgeOperator?.bridge_id || `supply-${result.assetCode}`;
-      
+
       // Insert verification result
       await db("verification_results").insert({
         id: undefined, // Auto-generated UUID
@@ -472,7 +472,7 @@ export class SupplyVerificationQueue {
         job_id: result.jobId,
         verified_at: result.verifiedAt,
       });
-      
+
       logger.debug({ assetCode: result.assetCode, jobId: result.jobId }, "Verification result persisted");
     } catch (error) {
       logger.error({ assetCode: result.assetCode, error }, "Failed to persist verification result");
@@ -485,9 +485,9 @@ export class SupplyVerificationQueue {
    */
   private async triggerFailureAlert(job: Job<SupplyVerificationJobData>, error: Error): Promise<void> {
     const { assetCode } = job.data;
-    
+
     logger.warn({ assetCode, jobId: job.id }, "Triggering failure alert after max retries");
-    
+
     try {
       // Create alert for supply verification failure
       await this.alertService.evaluateAsset({
@@ -497,7 +497,7 @@ export class SupplyVerificationQueue {
           consecutive_failures: job.attemptsMade,
         },
       });
-      
+
       logger.info({ assetCode }, "Failure alert triggered");
     } catch (alertError) {
       logger.error({ assetCode, error: alertError }, "Failed to trigger failure alert");
@@ -515,7 +515,7 @@ export class SupplyVerificationQueue {
       { assetCode, mismatch: result.mismatchPercentage },
       "Triggering supply mismatch alert"
     );
-    
+
     try {
       await this.alertService.evaluateAsset({
         assetCode,
@@ -525,7 +525,7 @@ export class SupplyVerificationQueue {
           ethereum_reserves: result.ethereumReserves,
         },
       });
-      
+
       logger.info({ assetCode }, "Supply mismatch alert triggered");
     } catch (alertError) {
       logger.error({ assetCode, error: alertError }, "Failed to trigger supply mismatch alert");
@@ -542,7 +542,14 @@ export class SupplyVerificationQueue {
     failed: number;
     delayed: number;
   }> {
-    return this.queue.getJobCounts();
+    const counts = await this.queue.getJobCounts("waiting", "active", "completed", "failed", "delayed");
+    return {
+      waiting: counts.waiting ?? 0,
+      active: counts.active ?? 0,
+      completed: counts.completed ?? 0,
+      failed: counts.failed ?? 0,
+      delayed: counts.delayed ?? 0,
+    };
   }
 
   /**
@@ -561,7 +568,7 @@ export class SupplyVerificationQueue {
       this.worker = null;
       logger.info("Supply verification worker stopped");
     }
-    
+
     await this.queue.close();
     logger.info("Supply verification queue closed");
   }
@@ -578,12 +585,12 @@ export function getSupplyVerificationQueue(): SupplyVerificationQueue {
  */
 export async function initSupplyVerificationJob(): Promise<void> {
   const queue = getSupplyVerificationQueue();
-  
+
   // Initialize worker with processor
   queue.initWorker();
-  
+
   // Schedule periodic batch verification (every 5 minutes)
   await queue.schedulePeriodicVerification("*/5 * * * *");
-  
+
   logger.info("Supply verification job system initialized");
 }
