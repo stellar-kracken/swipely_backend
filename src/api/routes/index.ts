@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { assetsRoutes } from "./assets.js";
 import { bridgesRoutes } from "./bridges.js";
 import { websocketRoutes } from "./websocket.js";
-import { alertsRoutes } from "./alerts.routes.js";
+import { alertsRoutes } from "./alerts.js";
+import { exportsRoutes } from "./exports.js";
 import { circuitBreakerRoutes } from "./circuitBreaker.js";
 import { preferencesRoutes } from "./preferences.js";
 import { apiKeysRoutes } from "./apiKeys.js";
@@ -28,6 +29,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(bridgesRoutes, { prefix: "/api/v1/bridges" });
   server.register(websocketRoutes, { prefix: "/api/v1/ws" });
   server.register(alertsRoutes, { prefix: "/api/v1/alerts" });
+  server.register(exportsRoutes, { prefix: "/api/v1/exports" });
   server.register(circuitBreakerRoutes, { prefix: "/api/v1/circuit-breaker" });
   server.register(preferencesRoutes, { prefix: "/api/v1/preferences" });
   server.register(apiKeysRoutes, { prefix: "/api/v1/admin/api-keys" });
