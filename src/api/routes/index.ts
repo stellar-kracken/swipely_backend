@@ -2,11 +2,14 @@ import type { FastifyInstance } from "fastify";
 import { assetsRoutes } from "./assets.js";
 import { bridgesRoutes } from "./bridges.js";
 import { websocketRoutes } from "./websocket.js";
-import { alertsRoutes } from "./alerts.routes.js";
+import { alertsRoutes } from "./alerts.js";
+import { exportsRoutes } from "./exports.js";
 import { circuitBreakerRoutes } from "./circuitBreaker.js";
 import { preferencesRoutes } from "./preferences.js";
 import { apiKeysRoutes } from "./apiKeys.js";
 import jobsRoutes from "./jobs.js";
+import { webhooksRoutes } from "./webhooks.js";
+
 import { configRoutes } from "./config.js";
 import { aggregationRoutes } from "./aggregation.js";
 import { metadataRoutes } from "./metadata.js";
@@ -26,10 +29,12 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(bridgesRoutes, { prefix: "/api/v1/bridges" });
   server.register(websocketRoutes, { prefix: "/api/v1/ws" });
   server.register(alertsRoutes, { prefix: "/api/v1/alerts" });
+  server.register(exportsRoutes, { prefix: "/api/v1/exports" });
   server.register(circuitBreakerRoutes, { prefix: "/api/v1/circuit-breaker" });
   server.register(preferencesRoutes, { prefix: "/api/v1/preferences" });
   server.register(apiKeysRoutes, { prefix: "/api/v1/admin/api-keys" });
   server.register(jobsRoutes, { prefix: "/api/v1/jobs" });
+  server.register(webhooksRoutes, { prefix: "/api/v1/webhooks" });
   server.register(configRoutes, { prefix: "/api/v1/config" });
   server.register(aggregationRoutes, { prefix: "/api/v1/aggregation" });
   server.register(metadataRoutes, { prefix: "/api/v1/metadata" });
@@ -39,6 +44,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(healthRoutes, { prefix: "/api/v1/health" });
   // Backward-compatible health endpoints for load tests and probes
   server.register(healthRoutes, { prefix: "/health" });
+  server.register(healthRoutes, { prefix: "/api/v1/health" });
   server.register(rateLimitAdminRoutes, { prefix: "/api/v1/admin/rate-limit" });
   server.register(tracingAdminRoutes, { prefix: "/api/v1/admin/tracing" });
   server.register(validationAdminRoutes, { prefix: "/api/v1/admin/validation" });

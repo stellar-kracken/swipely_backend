@@ -10,11 +10,11 @@ export async function registerMetrics(server: FastifyInstance): Promise<void> {
   const metricsService = getMetricsService();
 
   // Track active connections
-  server.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
+  server.addHook("onRequest", async (_request: FastifyRequest, _reply: FastifyReply) => {
     metricsService.httpActiveConnections.inc();
   });
 
-  server.addHook("onResponse", async (request: FastifyRequest, reply: FastifyReply) => {
+  server.addHook("onResponse", async (_request: FastifyRequest, _reply: FastifyReply) => {
     metricsService.httpActiveConnections.dec();
   });
 

@@ -6,7 +6,6 @@ import swaggerUi from "@fastify/swagger-ui";
 import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
-import { registerTracing } from "./api/middleware/tracing.js";
 import { registerValidation } from "./api/middleware/validation.js";
 import { registerMetrics } from "./api/middleware/metrics.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
@@ -17,11 +16,16 @@ import {
 } from "./api/middleware/rateLimit.middleware.js";
 import { initJobSystem } from "./workers/index.js";
 import { JobQueue } from "./workers/queue.js";
+import { initWebhookWorker, stopWebhookWorker } from "./workers/webhookDelivery.worker.js";
+import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
+import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
+import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
+import { metricsRoutes } from "./api/routes/metrics.js";
 
 export async function buildServer() {
   const server = Fastify({
-    loggerInstance: logger,
+    logger: logger,
     ajv: {
       customOptions: {
         strict: false,
@@ -55,8 +59,11 @@ export async function buildServer() {
     additionalProperties: true,
   });
 
-  // Register tracing middleware first (to capture all requests)
-  await registerTracing(server as any);
+  // Register correlation middleware first (to capture trace context for all requests)
+  await registerCorrelationMiddleware(server as any);
+
+  // Register request/response logging middleware
+  await registerRequestLoggingMiddleware(server as any);
 
   // Register metrics middleware (to capture all requests)
   await registerMetrics(server as any);
@@ -84,6 +91,8 @@ export async function buildServer() {
   // Register routes
   await registerRoutes(server as any);
 
+  // Register Prometheus metrics endpoint
+  await metricsRoutes(server as any);
   // Rate-limit metrics (internal monitoring endpoint)
   server.get(
     "/api/v1/metrics/rate-limits",
@@ -122,6 +131,21 @@ async function start() {
 
     // Initialize background jobs
     await initJobSystem();
+
+    // Initialize webhook delivery worker
+    await initWebhookWorker();
+
+    // Graceful shutdown
+    const shutdown = async () => {
+      logger.info("Closing server...");
+      await server.close();
+      await JobQueue.getInstance().stop();
+      await stopWebhookWorker();
+      process.exit(0);
+    };
+
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
   } catch (err) {
     server.log.error(err);
     process.exit(1);
@@ -134,6 +158,7 @@ async function start() {
     await wsServer.shutdown();
     await server.close();
     await JobQueue.getInstance().stop();
+    await getSupplyVerificationQueue().stop();
     logger.info("Server closed");
     process.exit(0);
   };
