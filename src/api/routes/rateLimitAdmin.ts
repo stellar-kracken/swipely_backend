@@ -114,8 +114,9 @@ export async function rateLimitAdminRoutes(server: FastifyInstance) {
 
         await rateLimitService.resetRateLimit(identifier, type, endpoint);
         
+        const rawKey = request.headers["x-api-key"] as string;
         logger.info(
-          { type, identifier, endpoint, adminKey: request.headers["x-api-key"] },
+          { type, identifier, endpoint, adminKeyPrefix: rawKey ? `${rawKey.slice(0, 8)}…` : undefined },
           "Rate limit reset by admin"
         );
 
@@ -172,8 +173,9 @@ export async function rateLimitAdminRoutes(server: FastifyInstance) {
 
         await rateLimitService.updateRateLimit(tier as any, newLimits);
         
+        const rawKey = request.headers["x-api-key"] as string;
         logger.info(
-          { tier, newLimits, adminKey: request.headers["x-api-key"] },
+          { tier, newLimits, adminKeyPrefix: rawKey ? `${rawKey.slice(0, 8)}…` : undefined },
           "Rate limits updated by admin"
         );
 

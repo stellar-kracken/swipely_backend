@@ -66,7 +66,7 @@ export async function getStellarAssetSupply(
   const server = getHorizonServer();
 
   try {
-    const accounts = await withHorizonTimeout<any>(
+    const accounts = await withHorizonTimeout<{ records: Array<{ amount: string }> }>(
       server.assets().forCode(assetCode).forIssuer(issuer).call()
     );
 
@@ -91,7 +91,9 @@ export async function getOrderBook(
 ): Promise<StellarSdk.Horizon.ServerApi.OrderbookRecord> {
   const server = getHorizonServer();
 
-  const base = new StellarSdk.Asset(baseCode, baseIssuer);
+  const base = (baseCode === "XLM" || baseIssuer === "native")
+    ? StellarSdk.Asset.native()
+    : new StellarSdk.Asset(baseCode, baseIssuer);
   const counter = counterIssuer && counterCode !== "XLM"
     ? new StellarSdk.Asset(counterCode, counterIssuer)
     : StellarSdk.Asset.native();
@@ -111,7 +113,7 @@ export async function getLiquidityPools(
 ): Promise<StellarSdk.Horizon.ServerApi.CollectionPage<StellarSdk.Horizon.ServerApi.LiquidityPoolRecord>> {
   const server = getHorizonServer();
   return withHorizonTimeout(
-    (server.liquidityPools() as any).forReserves(assetA, assetB).call()
+    (server.liquidityPools() as unknown as { forReserves: (a: StellarSdk.Asset, b: StellarSdk.Asset) => { call: () => Promise<StellarSdk.Horizon.ServerApi.CollectionPage<StellarSdk.Horizon.ServerApi.LiquidityPoolRecord>> } }).forReserves(assetA, assetB).call()
   );
 }
 
@@ -127,7 +129,7 @@ export function streamPayments(
     .payments()
     .cursor("now")
     .stream({
-      onmessage: (payment: any) => {
+      onmessage: (payment: unknown) => {
         onPayment(payment as StellarSdk.Horizon.ServerApi.PaymentOperationRecord);
       },
     });
