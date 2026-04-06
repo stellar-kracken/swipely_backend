@@ -6,6 +6,8 @@ import swaggerUi from "@fastify/swagger-ui";
 import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
+import { registerValidation } from "./api/middleware/validation.js";
+import { registerMetrics } from "./api/middleware/metrics.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
 import {
   registerRateLimiting,
@@ -13,12 +15,57 @@ import {
 } from "./api/middleware/rateLimit.middleware.js";
 import { initJobSystem } from "./workers/index.js";
 import { JobQueue } from "./workers/queue.js";
+import { initWebhookWorker, stopWebhookWorker } from "./workers/webhookDelivery.worker.js";
+import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
+import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
+import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
+import { metricsRoutes } from "./api/routes/metrics.js";
 
 export async function buildServer() {
   const server = Fastify({
     logger: logger,
+    ajv: {
+      customOptions: {
+        strict: false,
+      },
+    },
   });
+
+  // Register shared schemas referenced via $ref in route definitions
+  server.addSchema({
+    $id: "Error",
+    type: "object",
+    properties: {
+      error: { type: "string" },
+      message: { type: "string" },
+      statusCode: { type: "number" },
+    },
+  });
+  server.addSchema({
+    $id: "HealthScore",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "AlertRule",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "Watchlist",
+    type: "object",
+    additionalProperties: true,
+  });
+
+  // Register correlation middleware first (to capture trace context for all requests)
+  await registerCorrelationMiddleware(server as any);
+
+  // Register request/response logging middleware
+  await registerRequestLoggingMiddleware(server as any);
+
+  // Register metrics middleware (to capture all requests)
+  await registerMetrics(server as any);
 
   // Register plugins
   await server.register(cors, {
@@ -33,34 +80,21 @@ export async function buildServer() {
   // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
   await registerRateLimiting(server as any);
 
-  await server.register(websocket);
+  // Data validation middleware
+  await registerValidation(server as any);
+
+  // Enable permessage-deflate compression for WebSocket frames.
+  await server.register(websocket, {
+    options: {
+      perMessageDeflate: true,
+    },
+  });
 
   // Register routes
   await registerRoutes(server as any);
 
-  // Health check
-  server.get(
-    "/health",
-    {
-      schema: {
-        tags: ["Health"],
-        summary: "Service health check",
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              status: { type: "string", example: "ok" },
-              timestamp: { type: "string", format: "date-time" },
-            },
-          },
-        },
-      },
-    },
-    async () => {
-      return { status: "ok", timestamp: new Date().toISOString() };
-    },
-  );
-
+  // Register Prometheus metrics endpoint
+  await metricsRoutes(server as any);
   // Rate-limit metrics (internal monitoring endpoint)
   server.get(
     "/api/v1/metrics/rate-limits",
@@ -100,11 +134,15 @@ async function start() {
     // Initialize background jobs
     await initJobSystem();
 
+    // Initialize webhook delivery worker
+    await initWebhookWorker();
+
     // Graceful shutdown
     const shutdown = async () => {
       logger.info("Closing server...");
       await server.close();
       await JobQueue.getInstance().stop();
+      await stopWebhookWorker();
       process.exit(0);
     };
 
@@ -114,6 +152,20 @@ async function start() {
     server.log.error(err);
     process.exit(1);
   }
+
+  // ─── Graceful shutdown ──────────────────────────────────────────────────────
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, "Shutdown signal received");
+
+    await server.close();
+    await JobQueue.getInstance().stop();
+    await getSupplyVerificationQueue().stop();
+    logger.info("Server closed");
+    process.exit(0);
+  };
+
+  process.once("SIGTERM", () => { shutdown("SIGTERM").catch(() => process.exit(1)); });
+  process.once("SIGINT",  () => { shutdown("SIGINT").catch(() => process.exit(1)); });
 }
 
 if (process.env.NODE_ENV !== "test") {
