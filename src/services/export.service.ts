@@ -1,312 +1,484 @@
-import { getDatabase } from "../database/connection.js";
-import { logger } from "../utils/logger.js";
-import { config } from "../config/index.js";
-import crypto from "crypto";
-import type {
-  ExportRequest,
-  ExportRecord,
-  ExportJobPayload,
-  DownloadLink,
-  PaginationOptions,
-  PaginatedExports,
-} from "../types/export.types.js";
-import { exportQueue } from "../jobs/export.job.js";
-
 /**
- * Export Service
- * 
- * Handles creation, tracking, and management of data exports.
- * Integrates with BullMQ queue for async processing.
+ * Data Export Service
+ * Handles data export in various formats (CSV, JSON, Excel) with async processing
  */
+
+import { getDatabase } from "../database/connection";
+import { logger } from "../utils/logger";
+import { randomBytes } from "crypto";
+import { redis } from "../utils/redis";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export type ExportFormat = "csv" | "json" | "excel";
+export type ExportStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface ExportRequest {
+  id: string;
+  user_id: string;
+  export_type: string;
+  format: ExportFormat;
+  filters: ExportFilters;
+  fields: string[];
+  status: ExportStatus;
+  download_url: string | null;
+  file_size: number | null;
+  row_count: number | null;
+  error_message: string | null;
+  created_at: Date;
+  completed_at: Date | null;
+  expires_at: Date | null;
+}
+
+export interface ExportFilters {
+  startDate?: string;
+  endDate?: string;
+  symbols?: string[];
+  categories?: string[];
+  minValue?: number;
+  maxValue?: number;
+}
+
+export interface ExportTemplate {
+  id: string;
+  name: string;
+  description: string;
+  export_type: string;
+  default_format: ExportFormat;
+  default_fields: string[];
+  default_filters: ExportFilters;
+  created_by: string;
+  created_at: Date;
+}
+
+// ─── Export Service ──────────────────────────────────────────────────────────
+
 export class ExportService {
+  private readonly EXPORT_EXPIRY_HOURS = 24;
+  private readonly MAX_SYNC_ROWS = 1000;
+
   /**
-   * Request a new export
-   * Creates a database record and enqueues a job for processing
-   * 
-   * @param userId - User requesting the export
-   * @param payload - Export request parameters
-   * @returns Created export record with job ID
+   * Create export request
    */
-  async requestExport(userId: string, payload: ExportRequest): Promise<ExportRecord> {
-    logger.info({ userId, payload }, "Requesting new export");
-
-    // Validate date range
-    this.validateDateRange(payload.filters.startDate, payload.filters.endDate);
-
-    // Validate email if delivery requested
-    if (payload.emailDelivery && !payload.emailAddress) {
-      throw new Error("Email address required when email delivery is enabled");
-    }
-
+  async createExport(
+    userId: string,
+    exportType: string,
+    format: ExportFormat,
+    filters: ExportFilters,
+    fields: string[],
+  ): Promise<ExportRequest> {
     const db = getDatabase();
 
-    // Create export history record
-    const [record] = await db("export_history")
-      .insert({
-        requested_by: userId,
-        format: payload.format,
-        data_type: payload.dataType,
-        filters: JSON.stringify(payload.filters),
+    try {
+      const exportId = randomBytes(16).toString("hex");
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + this.EXPORT_EXPIRY_HOURS);
+
+      const exportRequest: Partial<ExportRequest> = {
+        id: exportId,
+        user_id: userId,
+        export_type: exportType,
+        format,
+        filters: JSON.stringify(filters) as any,
+        fields: JSON.stringify(fields) as any,
         status: "pending",
-        email_delivery: payload.emailDelivery || false,
-        email_address: payload.emailAddress || null,
-      })
-      .returning("*");
+        download_url: null,
+        file_size: null,
+        row_count: null,
+        error_message: null,
+        created_at: new Date(),
+        completed_at: null,
+        expires_at: expiresAt,
+      };
 
-    logger.info({ exportId: record.id, userId }, "Export record created");
+      await db("export_requests").insert(exportRequest);
 
-    // Enqueue export job
-    const jobPayload: ExportJobPayload = {
-      exportId: record.id,
-      requestedBy: userId,
-      format: payload.format,
-      dataType: payload.dataType,
-      filters: payload.filters,
-      emailDelivery: payload.emailDelivery || false,
-      emailAddress: payload.emailAddress,
-    };
+      // Check if we should process sync or async
+      const estimatedRows = await this.estimateRowCount(exportType, filters);
 
-    await exportQueue.add("process-export", jobPayload, {
-      attempts: 3,
-      backoff: {
-        type: "exponential",
-        delay: 2000,
-      },
-      removeOnComplete: {
-        age: 86400, // Keep completed jobs for 24 hours
-        count: 1000,
-      },
-      removeOnFail: {
-        age: 604800, // Keep failed jobs for 7 days
-      },
-    });
+      if (estimatedRows <= this.MAX_SYNC_ROWS) {
+        // Process synchronously
+        await this.processExport(exportId);
+      } else {
+        // Queue for async processing
+        await this.queueExport(exportId);
+      }
 
-    logger.info({ exportId: record.id, jobPayload }, "Export job enqueued");
-
-    return this.mapDatabaseRecord(record);
+      return (await this.getExport(exportId))!;
+    } catch (error) {
+      logger.error({ error, userId, exportType }, "Failed to create export");
+      throw error;
+    }
   }
 
   /**
-   * Get export status by ID
-   * 
-   * @param exportId - Export record ID
-   * @returns Export record with current status
+   * Get export request
    */
-  async getExportStatus(exportId: string): Promise<ExportRecord | null> {
-    logger.info({ exportId }, "Fetching export status");
-
+  async getExport(exportId: string): Promise<ExportRequest | null> {
     const db = getDatabase();
-    const record = await db("export_history").where({ id: exportId }).first();
 
-    if (!record) {
-      logger.warn({ exportId }, "Export record not found");
+    try {
+      const exportRequest = await db("export_requests")
+        .where({ id: exportId })
+        .first();
+
+      if (!exportRequest) {
+        return null;
+      }
+
+      return {
+        ...exportRequest,
+        filters: JSON.parse(exportRequest.filters || "{}"),
+        fields: JSON.parse(exportRequest.fields || "[]"),
+      };
+    } catch (error) {
+      logger.error({ error, exportId }, "Failed to get export");
       return null;
     }
-
-    return this.mapDatabaseRecord(record);
   }
 
   /**
-   * List exports for a user with pagination
-   * 
-   * @param userId - User ID to filter exports
-   * @param options - Pagination options
-   * @returns Paginated list of exports
+   * Process export
    */
-  async listExports(userId: string, options: PaginationOptions): Promise<PaginatedExports> {
-    logger.info({ userId, options }, "Listing exports");
-
+  async processExport(exportId: string): Promise<void> {
     const db = getDatabase();
-    const { page, limit } = options;
-    const offset = (page - 1) * limit;
 
-    const [records, countResult] = await Promise.all([
-      db("export_history")
-        .where({ requested_by: userId })
-        .orderBy("created_at", "desc")
-        .limit(limit)
-        .offset(offset),
-      db("export_history").where({ requested_by: userId }).count("* as count").first(),
-    ]);
-
-    const total = typeof countResult?.count === "number"
-      ? countResult.count
-      : parseInt(String(countResult?.count || "0"), 10);
-
-    return {
-      exports: records.map((r) => this.mapDatabaseRecord(r)),
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
-  }
-
-  /**
-   * Generate or refresh download URL for an export
-   * 
-   * @param exportId - Export record ID
-   * @returns Download link with expiry
-   */
-  async generateDownloadUrl(exportId: string): Promise<DownloadLink> {
-    logger.info({ exportId }, "Generating download URL");
-
-    const db = getDatabase();
-    const record = await db("export_history").where({ id: exportId }).first();
-
-    if (!record) {
-      throw new Error("Export not found");
-    }
-
-    if (record.status !== "completed") {
-      throw new Error(`Export is not completed (status: ${record.status})`);
-    }
-
-    if (!record.file_path) {
-      throw new Error("Export file path not found");
-    }
-
-    // Generate signed URL token
-    const token = this.generateDownloadToken(exportId);
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + config.EXPORT_DOWNLOAD_URL_EXPIRY_HOURS);
-
-    // In a real implementation with cloud storage (S3/GCS), this would generate a pre-signed URL
-    // For local storage, we use a token-based approach
-    const downloadUrl = `/api/v1/exports/${exportId}/download?token=${token}`;
-
-    // Update record with new URL and expiry
-    await db("export_history")
-      .where({ id: exportId })
-      .update({
-        download_url: downloadUrl,
-        download_url_expires_at: expiresAt,
-        updated_at: db.fn.now(),
-      });
-
-    logger.info({ exportId, expiresAt }, "Download URL generated");
-
-    return {
-      url: downloadUrl,
-      expiresAt,
-    };
-  }
-
-  /**
-   * Delete an export and its associated file
-   * 
-   * @param exportId - Export record ID
-   */
-  async deleteExport(exportId: string): Promise<void> {
-    logger.info({ exportId }, "Deleting export");
-
-    const db = getDatabase();
-    const record = await db("export_history").where({ id: exportId }).first();
-
-    if (!record) {
-      throw new Error("Export not found");
-    }
-
-    // Delete file if it exists
-    if (record.file_path) {
-      try {
-        const fs = await import("fs/promises");
-        await fs.unlink(record.file_path);
-        logger.info({ exportId, filePath: record.file_path }, "Export file deleted");
-      } catch (error) {
-        logger.error({ error, exportId, filePath: record.file_path }, "Failed to delete export file");
-        // Continue with database deletion even if file deletion fails
+    try {
+      const exportRequest = await this.getExport(exportId);
+      if (!exportRequest) {
+        throw new Error("Export request not found");
       }
+
+      // Update status to processing
+      await db("export_requests")
+        .where({ id: exportId })
+        .update({ status: "processing" });
+
+      // Fetch data
+      const data = await this.fetchData(
+        exportRequest.export_type,
+        exportRequest.filters,
+        exportRequest.fields,
+      );
+
+      // Convert to requested format
+      const fileContent = await this.convertToFormat(
+        data,
+        exportRequest.format,
+        exportRequest.fields,
+      );
+
+      // Generate download URL (in production, upload to S3/storage)
+      const downloadUrl = await this.generateDownloadUrl(exportId, fileContent);
+
+      // Update export request
+      await db("export_requests")
+        .where({ id: exportId })
+        .update({
+          status: "completed",
+          download_url: downloadUrl,
+          file_size: Buffer.byteLength(fileContent),
+          row_count: data.length,
+          completed_at: new Date(),
+        });
+
+      logger.info({ exportId, rowCount: data.length }, "Export completed");
+    } catch (error) {
+      logger.error({ error, exportId }, "Failed to process export");
+
+      await db("export_requests")
+        .where({ id: exportId })
+        .update({
+          status: "failed",
+          error_message:
+            error instanceof Error ? error.message : "Unknown error",
+        });
     }
-
-    // Delete database record
-    await db("export_history").where({ id: exportId }).del();
-
-    logger.info({ exportId }, "Export record deleted");
   }
 
   /**
-   * Update export status (used by worker)
-   * 
-   * @param exportId - Export record ID
-   * @param updates - Fields to update
+   * Fetch data based on export type
    */
-  async updateExportStatus(exportId: string, updates: Partial<ExportRecord>): Promise<void> {
-    logger.info({ exportId, updates }, "Updating export status");
-
+  private async fetchData(
+    exportType: string,
+    filters: ExportFilters,
+    fields: string[],
+  ): Promise<any[]> {
     const db = getDatabase();
 
-    // Map camelCase to snake_case for database
-    const dbUpdates: any = {
-      updated_at: db.fn.now(),
-    };
+    try {
+      let query = db(exportType);
 
-    if (updates.status) dbUpdates.status = updates.status;
-    if (updates.file_path) dbUpdates.file_path = updates.file_path;
-    if (updates.download_url) dbUpdates.download_url = updates.download_url;
-    if (updates.download_url_expires_at) dbUpdates.download_url_expires_at = updates.download_url_expires_at;
-    if (updates.file_size_bytes !== undefined) dbUpdates.file_size_bytes = updates.file_size_bytes;
-    if (updates.is_compressed !== undefined) dbUpdates.is_compressed = updates.is_compressed;
-    if (updates.error_message !== undefined) dbUpdates.error_message = updates.error_message;
+      // Apply date filters
+      if (filters.startDate) {
+        query = query.where("time", ">=", filters.startDate);
+      }
+      if (filters.endDate) {
+        query = query.where("time", "<=", filters.endDate);
+      }
 
-    await db("export_history").where({ id: exportId }).update(dbUpdates);
+      // Apply symbol filters
+      if (filters.symbols && filters.symbols.length > 0) {
+        query = query.whereIn("symbol", filters.symbols);
+      }
 
-    logger.info({ exportId }, "Export status updated");
-  }
+      // Apply value filters
+      if (filters.minValue !== undefined) {
+        query = query.where("value", ">=", filters.minValue);
+      }
+      if (filters.maxValue !== undefined) {
+        query = query.where("value", "<=", filters.maxValue);
+      }
 
-  /**
-   * Validate date range
-   */
-  private validateDateRange(startDate: string, endDate: string): void {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+      // Select fields
+      if (fields.length > 0) {
+        query = query.select(fields);
+      }
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      throw new Error("Invalid date format");
-    }
+      // Limit for safety
+      query = query.limit(100000);
 
-    if (start >= end) {
-      throw new Error("Start date must be before end date");
-    }
-
-    const daysDiff = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-    if (daysDiff > config.EXPORT_MAX_DATE_RANGE_DAYS) {
-      throw new Error(
-        `Date range exceeds maximum of ${config.EXPORT_MAX_DATE_RANGE_DAYS} days`
-      );
+      return await query;
+    } catch (error) {
+      logger.error({ error, exportType }, "Failed to fetch data");
+      throw error;
     }
   }
 
   /**
-   * Generate download token for URL signing
+   * Convert data to requested format
    */
-  private generateDownloadToken(exportId: string): string {
-    const secret = process.env.JWT_SECRET || "default-secret-change-in-production";
-    const data = `${exportId}:${Date.now()}`;
-    return crypto.createHmac("sha256", secret).update(data).digest("hex");
+  private async convertToFormat(
+    data: any[],
+    format: ExportFormat,
+    fields: string[],
+  ): Promise<string> {
+    switch (format) {
+      case "csv":
+        return this.convertToCSV(data, fields);
+      case "json":
+        return this.convertToJSON(data);
+      case "excel":
+        return this.convertToExcel(data, fields);
+      default:
+        throw new Error(`Unsupported format: ${format}`);
+    }
   }
 
   /**
-   * Map database record to ExportRecord type
+   * Convert to CSV
    */
-  private mapDatabaseRecord(record: any): ExportRecord {
-    return {
-      id: record.id,
-      requested_by: record.requested_by,
-      format: record.format,
-      data_type: record.data_type,
-      filters: typeof record.filters === "string" ? JSON.parse(record.filters) : record.filters,
-      status: record.status,
-      file_path: record.file_path,
-      download_url: record.download_url,
-      download_url_expires_at: record.download_url_expires_at,
-      file_size_bytes: record.file_size_bytes,
-      is_compressed: record.is_compressed,
-      error_message: record.error_message,
-      email_delivery: record.email_delivery,
-      email_address: record.email_address,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
-    };
+  private convertToCSV(data: any[], fields: string[]): string {
+    if (data.length === 0) {
+      return "";
+    }
+
+    const headers = fields.length > 0 ? fields : Object.keys(data[0]);
+    const rows = data.map((row) =>
+      headers
+        .map((field) => {
+          const value = row[field];
+          // Escape quotes and wrap in quotes if contains comma
+          if (value === null || value === undefined) return "";
+          const stringValue = String(value);
+          if (stringValue.includes(",") || stringValue.includes('"')) {
+            return `"${stringValue.replace(/"/g, '""')}"`;
+          }
+          return stringValue;
+        })
+        .join(","),
+    );
+
+    return [headers.join(","), ...rows].join("\n");
+  }
+
+  /**
+   * Convert to JSON
+   */
+  private convertToJSON(data: any[]): string {
+    return JSON.stringify(data, null, 2);
+  }
+
+  /**
+   * Convert to Excel (simplified - returns CSV for now)
+   */
+  private convertToExcel(data: any[], fields: string[]): string {
+    // In production, use a library like exceljs
+    return this.convertToCSV(data, fields);
+  }
+
+  /**
+   * Generate download URL
+   */
+  private async generateDownloadUrl(
+    exportId: string,
+    content: string,
+  ): Promise<string> {
+    // Store in Redis with expiry
+    const key = `export:${exportId}`;
+    await redis.setex(key, this.EXPORT_EXPIRY_HOURS * 3600, content);
+
+    // Return download URL
+    return `/api/v1/export/download/${exportId}`;
+  }
+
+  /**
+   * Get download content
+   */
+  async getDownloadContent(exportId: string): Promise<string | null> {
+    try {
+      const key = `export:${exportId}`;
+      return await redis.get(key);
+    } catch (error) {
+      logger.error({ error, exportId }, "Failed to get download content");
+      return null;
+    }
+  }
+
+  /**
+   * Estimate row count
+   */
+  private async estimateRowCount(
+    exportType: string,
+    filters: ExportFilters,
+  ): Promise<number> {
+    const db = getDatabase();
+
+    try {
+      let query = db(exportType);
+
+      if (filters.startDate) {
+        query = query.where("time", ">=", filters.startDate);
+      }
+      if (filters.endDate) {
+        query = query.where("time", "<=", filters.endDate);
+      }
+      if (filters.symbols && filters.symbols.length > 0) {
+        query = query.whereIn("symbol", filters.symbols);
+      }
+
+      const result = await query.count("* as count").first();
+      return parseInt(result?.count as string) || 0;
+    } catch (error) {
+      logger.error({ error }, "Failed to estimate row count");
+      return 0;
+    }
+  }
+
+  /**
+   * Queue export for async processing
+   */
+  private async queueExport(exportId: string): Promise<void> {
+    // In production, use a job queue like Bull
+    logger.info({ exportId }, "Export queued for async processing");
+
+    // For now, process in background
+    setTimeout(() => this.processExport(exportId), 1000);
+  }
+
+  /**
+   * Get user export history
+   */
+  async getExportHistory(
+    userId: string,
+    limit: number = 50,
+  ): Promise<ExportRequest[]> {
+    const db = getDatabase();
+
+    try {
+      const exports = await db("export_requests")
+        .where({ user_id: userId })
+        .orderBy("created_at", "desc")
+        .limit(limit);
+
+      return exports.map((exp: any) => ({
+        ...exp,
+        filters: JSON.parse(exp.filters || "{}"),
+        fields: JSON.parse(exp.fields || "[]"),
+      }));
+    } catch (error) {
+      logger.error({ error, userId }, "Failed to get export history");
+      return [];
+    }
+  }
+
+  /**
+   * Create export template
+   */
+  async createTemplate(
+    template: Omit<ExportTemplate, "id" | "created_at">,
+  ): Promise<ExportTemplate> {
+    const db = getDatabase();
+
+    try {
+      const templateId = randomBytes(16).toString("hex");
+      const newTemplate = {
+        id: templateId,
+        ...template,
+        default_fields: JSON.stringify(template.default_fields),
+        default_filters: JSON.stringify(template.default_filters),
+        created_at: new Date(),
+      };
+
+      await db("export_templates").insert(newTemplate);
+
+      return {
+        ...newTemplate,
+        default_fields: template.default_fields,
+        default_filters: template.default_filters,
+      } as ExportTemplate;
+    } catch (error) {
+      logger.error({ error }, "Failed to create template");
+      throw error;
+    }
+  }
+
+  /**
+   * Get export templates
+   */
+  async getTemplates(): Promise<ExportTemplate[]> {
+    const db = getDatabase();
+
+    try {
+      const templates = await db("export_templates").orderBy("name");
+
+      return templates.map((t: any) => ({
+        ...t,
+        default_fields: JSON.parse(t.default_fields || "[]"),
+        default_filters: JSON.parse(t.default_filters || "{}"),
+      }));
+    } catch (error) {
+      logger.error({ error }, "Failed to get templates");
+      return [];
+    }
+  }
+
+  /**
+   * Cleanup expired exports
+   */
+  async cleanupExpiredExports(): Promise<void> {
+    const db = getDatabase();
+
+    try {
+      const expired = await db("export_requests")
+        .where("expires_at", "<", new Date())
+        .where("status", "completed");
+
+      for (const exp of expired) {
+        // Delete from Redis
+        await redis.del(`export:${exp.id}`);
+      }
+
+      // Delete from database
+      await db("export_requests").where("expires_at", "<", new Date()).delete();
+
+      logger.info({ count: expired.length }, "Cleaned up expired exports");
+    } catch (error) {
+      logger.error({ error }, "Failed to cleanup expired exports");
+    }
   }
 }
+
+// ─── Singleton Instance ──────────────────────────────────────────────────────
+
+export const exportService = new ExportService();
