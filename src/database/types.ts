@@ -355,3 +355,38 @@ export interface AssetTransactionSyncState {
   created_at: Date;
   updated_at: Date;
 }
+
+// ─── tracked_balances / balance_history ─────────────────────────────────────
+
+export interface TrackedBalance {
+  id: string;
+  asset_code: string;
+  asset_issuer: string | null;
+  address_label: string;
+  address: string;
+  chain: string;
+  address_type: string;
+  current_balance: string;
+  previous_balance: string;
+  balance_change: string;
+  change_percentage: string;
+  last_checked_at: Date | null;
+  last_changed_at: Date | null;
+  metadata: unknown | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface BalanceHistoryRecord {
+  id: string;
+  tracked_balance_id: string;
+  asset_code: string;
+  chain: string;
+  address: string;
+  balance: string;
+  balance_change: string;
+  change_percentage: string;
+  block_number: string | null;
+  recorded_at: Date;
+  metadata: unknown | null;
+}
