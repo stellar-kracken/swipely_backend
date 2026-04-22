@@ -4,13 +4,26 @@ import { beforeAll, afterAll, vi } from "vitest";
 vi.mock("ioredis", () => {
   return {
     default: class RedisMock {
+      private static sortedSetStore = new Map<string, number[]>();
+
       on = vi.fn().mockReturnThis();
       get = vi.fn().mockResolvedValue(null);
       set = vi.fn().mockResolvedValue("OK");
       quit = vi.fn().mockResolvedValue(null);
       disconnect = vi.fn().mockResolvedValue(null);
-      del = vi.fn().mockResolvedValue(0);
-      keys = vi.fn().mockResolvedValue([]);
+      del = vi.fn(async (...keys: string[]) => {
+        let deleted = 0;
+        for (const key of keys) {
+          if (RedisMock.sortedSetStore.delete(key)) {
+            deleted += 1;
+          }
+        }
+        return deleted;
+      });
+      keys = vi.fn(async (pattern: string) => {
+        const regex = new RegExp("^" + pattern.replace(/[-/\\^$+?.()|[\]{}]/g, "\\$&").replace(/\*/g, ".*") + "$");
+        return Array.from(RedisMock.sortedSetStore.keys()).filter((k) => regex.test(k));
+      });
       incr = vi.fn().mockResolvedValue(0);
       decr = vi.fn().mockResolvedValue(0);
       incrby = vi.fn().mockResolvedValue(0);
@@ -39,6 +52,27 @@ vi.mock("ioredis", () => {
       unsubscribe = vi.fn().mockResolvedValue(null);
       flushdb = vi.fn().mockResolvedValue("OK");
       flushall = vi.fn().mockResolvedValue("OK");
+      eval = vi.fn(async (_script: string, _numKeys: number, key: string, now: string, window: string, limit: string, burst: string) => {
+        const nowMs = Number(now);
+        const windowMs = Number(window);
+        const limitNum = Number(limit);
+        const burstNum = Number(burst);
+        const effectiveLimit = limitNum + burstNum;
+
+        const existing = RedisMock.sortedSetStore.get(key) ?? [];
+        const active = existing.filter((ts) => ts > nowMs - windowMs);
+
+        if (active.length >= effectiveLimit) {
+          const oldest = active[0] ?? nowMs;
+          const resetMs = oldest + windowMs;
+          RedisMock.sortedSetStore.set(key, active);
+          return [0, active.length, resetMs, limitNum];
+        }
+
+        active.push(nowMs);
+        RedisMock.sortedSetStore.set(key, active);
+        return [1, active.length, nowMs + windowMs, limitNum];
+      });
       pipeline = vi.fn().mockReturnValue({
         exec: vi.fn().mockResolvedValue([]),
         zadd: vi.fn().mockReturnThis(),
@@ -69,6 +103,8 @@ vi.mock("bullmq", () => {
     constructor(name: string) {
       this.name = name;
     }
+
+    on = vi.fn().mockReturnThis();
 
     add = vi.fn(async (name: string, data?: unknown, opts?: unknown) => ({
       id: "mock-job",

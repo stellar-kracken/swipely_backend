@@ -21,11 +21,12 @@ import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
-import { metricsRoutes } from "./api/routes/metrics.js";
+import { registerTracing } from "./api/middleware/tracing.js";
 
 export async function buildServer() {
   const server = Fastify({
-    logger: logger,
+    logger: false,
+    loggerInstance: logger,
     ajv: {
       customOptions: {
         strict: false,
@@ -65,6 +66,9 @@ export async function buildServer() {
   // Register request/response logging middleware
   await registerRequestLoggingMiddleware(server as any);
 
+  // Register tracing middleware to populate trace headers/context
+  await registerTracing(server as any);
+
   // Register metrics middleware (to capture all requests)
   await registerMetrics(server as any);
 
@@ -90,9 +94,6 @@ export async function buildServer() {
 
   // Register routes
   await registerRoutes(server as any);
-
-  // Register Prometheus metrics endpoint
-  await metricsRoutes(server as any);
   // Rate-limit metrics (internal monitoring endpoint)
   server.get(
     "/api/v1/metrics/rate-limits",

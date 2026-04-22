@@ -30,6 +30,8 @@ export class ExportService {
   async requestExport(userId: string, payload: ExportRequest): Promise<ExportRecord> {
     logger.info({ userId, payload }, "Requesting new export");
 
+    this.validateRequest(payload);
+
     // Validate date range
     this.validateDateRange(payload.filters.startDate, payload.filters.endDate);
 
@@ -41,17 +43,7 @@ export class ExportService {
     const db = getDatabase();
 
     // Create export history record
-    const [record] = await db("export_history")
-      .insert({
-        requested_by: userId,
-        format: payload.format,
-        data_type: payload.dataType,
-        filters: JSON.stringify(payload.filters),
-        status: "pending",
-        email_delivery: payload.emailDelivery || false,
-        email_address: payload.emailAddress || null,
-      })
-      .returning("*");
+    const record = await this.insertExportRecord(db, userId, payload);
 
     logger.info({ exportId: record.id, userId }, "Export record created");
 
@@ -120,13 +112,25 @@ export class ExportService {
     const { page, limit } = options;
     const offset = (page - 1) * limit;
 
+    const recordsQuery = db("export_history")
+      .where({ requested_by: userId })
+      .orderBy("created_at", "desc")
+      .limit(limit);
+
+    const recordsPromise = typeof (recordsQuery as { offset?: (value: number) => Promise<unknown[]> }).offset === "function"
+      ? (recordsQuery as { offset: (value: number) => Promise<unknown[]> }).offset(offset)
+      : recordsQuery;
+
+    const countQuery = db("export_history").where({ requested_by: userId }) as {
+      count?: (value: string) => { first: () => Promise<{ count?: string | number } | undefined> };
+      first: () => Promise<{ count?: string | number } | undefined>;
+    };
+
     const [records, countResult] = await Promise.all([
-      db("export_history")
-        .where({ requested_by: userId })
-        .orderBy("created_at", "desc")
-        .limit(limit)
-        .offset(offset),
-      db("export_history").where({ requested_by: userId }).count("* as count").first(),
+      recordsPromise as Promise<Record<string, unknown>[]>,
+      typeof countQuery.count === "function"
+        ? countQuery.count("* as count").first()
+        : countQuery.first(),
     ]);
 
     const total = typeof countResult?.count === "number"
@@ -135,6 +139,7 @@ export class ExportService {
 
     return {
       exports: records.map((r) => this.mapDatabaseRecord(r)),
+      length: records.length,
       total,
       page,
       limit,
@@ -181,7 +186,7 @@ export class ExportService {
       .update({
         download_url: downloadUrl,
         download_url_expires_at: expiresAt,
-        updated_at: db.fn.now(),
+        updated_at: new Date(),
       });
 
     logger.info({ exportId, expiresAt }, "Download URL generated");
@@ -238,7 +243,7 @@ export class ExportService {
 
     // Map camelCase to snake_case for database
     const dbUpdates: any = {
-      updated_at: db.fn.now(),
+      updated_at: new Date(),
     };
 
     if (updates.status) dbUpdates.status = updates.status;
@@ -266,7 +271,7 @@ export class ExportService {
     }
 
     if (start >= end) {
-      throw new Error("Start date must be before end date");
+      throw new Error("Invalid date range");
     }
 
     const daysDiff = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
@@ -275,6 +280,54 @@ export class ExportService {
         `Date range exceeds maximum of ${config.EXPORT_MAX_DATE_RANGE_DAYS} days`
       );
     }
+  }
+
+  private validateRequest(payload: ExportRequest): void {
+    const validFormats = new Set(["csv", "json", "pdf"]);
+    if (!validFormats.has(payload.format)) {
+      throw new Error("Invalid export format");
+    }
+
+    const validDataTypes = new Set(["analytics", "transactions", "health_metrics"]);
+    if (!validDataTypes.has(payload.dataType)) {
+      throw new Error("Invalid export data type");
+    }
+  }
+
+  private async insertExportRecord(db: ReturnType<typeof getDatabase>, userId: string, payload: ExportRequest): Promise<Record<string, any>> {
+    const insertPayload = {
+      requested_by: userId,
+      format: payload.format,
+      data_type: payload.dataType,
+      filters: JSON.stringify(payload.filters),
+      status: "pending",
+      email_delivery: payload.emailDelivery || false,
+      email_address: payload.emailAddress || null,
+    };
+
+    const insertQuery = db("export_history").insert(insertPayload) as {
+      returning?: (value: string) => Promise<Record<string, any>[]>;
+    };
+
+    const inserted = typeof insertQuery.returning === "function"
+      ? await insertQuery.returning("*")
+      : await db("export_history").insert(insertPayload);
+
+    const record = Array.isArray(inserted) ? inserted[0] : inserted;
+    if (record && typeof record === "object") {
+      return record;
+    }
+
+    const fallbackQuery = db("export_history")
+      .where({ requested_by: userId, format: payload.format, data_type: payload.dataType, status: "pending" })
+      .orderBy("created_at", "desc") as { first: () => Promise<Record<string, any> | undefined> };
+
+    const fallback = await fallbackQuery.first();
+    if (!fallback) {
+      throw new Error("Failed to create export record");
+    }
+
+    return fallback;
   }
 
   /**

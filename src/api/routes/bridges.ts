@@ -41,9 +41,12 @@ export async function bridgesRoutes(server: FastifyInstance) {
         },
       },
     },
-    async (request, _reply) => {
+    async (request, reply) => {
       const { bridge } = request.params;
       const stats = await bridgeService.getBridgeStats(bridge);
+      if (!stats) {
+        return reply.status(404).send({ error: "Bridge not found" });
+      }
       return stats;
     },
   );

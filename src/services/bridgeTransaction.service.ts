@@ -100,12 +100,18 @@ export class BridgeTransactionService {
   async getBridgeTransactionSummary(bridgeName: string): Promise<BridgeTransactionSummary> {
     const db = getDatabase();
 
+    type SummaryRow = {
+      total_transactions: string | number;
+      total_volume: string | number;
+    };
+
     const [counts, timing] = await Promise.all([
       db("bridge_transactions")
         .where({ bridge_name: bridgeName })
-        .countDistinct("id as total_transactions")
-        .sum("amount::numeric as total_volume")
-        .first(),
+        .first(
+          db.raw("COUNT(DISTINCT id) AS total_transactions"),
+          db.raw("COALESCE(SUM(amount::numeric), 0) AS total_volume")
+        ) as unknown as Promise<SummaryRow | undefined>,
       db("bridge_transactions")
         .where({ bridge_name: bridgeName, status: "confirmed" })
         .select(db.raw("AVG(EXTRACT(EPOCH FROM (confirmed_at - submitted_at))) as avg"))

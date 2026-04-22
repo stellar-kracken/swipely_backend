@@ -46,7 +46,6 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(healthRoutes, { prefix: "/api/v1/health" });
   // Backward-compatible health endpoints for load tests and probes
   server.register(healthRoutes, { prefix: "/health" });
-  server.register(healthRoutes, { prefix: "/api/v1/health" });
   server.register(rateLimitAdminRoutes, { prefix: "/api/v1/admin/rate-limit" });
   server.register(tracingAdminRoutes, { prefix: "/api/v1/admin/tracing" });
   server.register(validationAdminRoutes, { prefix: "/api/v1/admin/validation" });

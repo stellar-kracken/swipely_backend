@@ -57,6 +57,12 @@ export const TIER_LIMITS: Record<Exclude<RateLimitTier, "trusted">, TierLimits> 
   },
 };
 
+const TIER_SCALE: Record<Exclude<RateLimitTier, "trusted">, number> = {
+  free: 1,
+  basic: 3,
+  premium: 10,
+};
+
 // Per-endpoint-category multiplier applied to tier limits.
 // Values < 1 make that category stricter relative to the tier baseline.
 const ENDPOINT_MULTIPLIERS: Record<EndpointCategory, number> = {
@@ -203,6 +209,10 @@ function getEndpointCategory(method: string, url: string): EndpointCategory {
 
 function getRouteGroup(url: string): string {
   const path = url.split("?")[0];
+
+  if (path.startsWith("/health")) return "health";
+  if (path.startsWith("/metrics")) return "metrics";
+
   const match = /^\/api\/v1\/([^/]+)/.exec(path);
   return match ? match[1] : "default";
 }
@@ -268,7 +278,10 @@ async function checkSlidingWindow(
 // ---------------------------------------------------------------------------
 
 export async function registerRateLimiting(server: FastifyInstance): Promise<void> {
-  if (config.NODE_ENV === "test") {
+  if (
+    config.NODE_ENV === "test" &&
+    process.env.ENABLE_RATE_LIMIT_IN_TESTS !== "true"
+  ) {
     server.addHook("preHandler", async (_request, reply) => {
       reply.header("X-RateLimit-Tier", "trusted");
     });
@@ -279,7 +292,8 @@ export async function registerRateLimiting(server: FastifyInstance): Promise<voi
   const whitelist = buildWhitelist();
 
   server.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
-    const ip = request.ip;
+    const forwardedFor = request.headers["x-forwarded-for"] as string | undefined;
+    const ip = forwardedFor?.split(",")[0]?.trim() || request.ip;
     const apiKey = request.headers["x-api-key"] as string | undefined;
 
     metrics.totalRequests++;
@@ -294,6 +308,13 @@ export async function registerRateLimiting(server: FastifyInstance): Promise<voi
 
     // ---- Determine tier and endpoint characteristics ----------------------
     const tier = getTierFromApiKey(apiKey);
+
+    if (tier === "trusted") {
+      metrics.byTier.trusted++;
+      reply.header("X-RateLimit-Tier", "trusted");
+      return;
+    }
+
     const category = getEndpointCategory(request.method, request.url);
     const routeGroup = getRouteGroup(request.url);
     const tierLimits = TIER_LIMITS[tier as keyof typeof TIER_LIMITS];
@@ -304,11 +325,15 @@ export async function registerRateLimiting(server: FastifyInstance): Promise<voi
     let effectiveBurst: number;
     let effectiveWindow: number;
     
-    if (endpointSpecificLimit && tier !== "trusted") {
+    if (endpointSpecificLimit) {
       // Use endpoint-specific limits for non-admin users
-      effectiveLimit = endpointSpecificLimit.requestsPerWindow || tierLimits.requestsPerWindow;
+      const baseLimit = endpointSpecificLimit.requestsPerWindow || tierLimits.requestsPerWindow;
+      const baseBurst = endpointSpecificLimit.burstAllowance || tierLimits.burstAllowance;
+      const tierScale = TIER_SCALE[tier as Exclude<RateLimitTier, "trusted">] || 1;
+
+      effectiveLimit = Math.max(1, Math.floor(baseLimit * tierScale));
       effectiveWindow = endpointSpecificLimit.windowMs || tierLimits.windowMs;
-      effectiveBurst = endpointSpecificLimit.burstAllowance || tierLimits.burstAllowance;
+      effectiveBurst = Math.max(0, Math.floor(baseBurst * tierScale));
     } else {
       // Use category-based multipliers
       const multiplier = ENDPOINT_MULTIPLIERS[category];
@@ -322,13 +347,16 @@ export async function registerRateLimiting(server: FastifyInstance): Promise<voi
     metrics.byRouteGroup[routeGroup] = (metrics.byRouteGroup[routeGroup] ?? 0) + 1;
 
     // ---- Per-IP sliding-window check -------------------------------------
-    const ipKey = `bw:rl:ip:${ip}:${routeGroup}`;
-    const ipResult = await checkSlidingWindow(
-      ipKey,
-      effectiveLimit,
-      effectiveBurst,
-      effectiveWindow
-    );
+    let ipResult: RateLimitResult | undefined;
+    if (apiKey === undefined) {
+      const ipKey = `bw:rl:ip:${ip}:${routeGroup}`;
+      ipResult = await checkSlidingWindow(
+        ipKey,
+        effectiveLimit,
+        effectiveBurst,
+        effectiveWindow
+      );
+    }
 
     // ---- Per-API-key sliding-window check --------------------------------
     let keyResult: RateLimitResult | undefined;
@@ -343,9 +371,13 @@ export async function registerRateLimiting(server: FastifyInstance): Promise<voi
     }
 
     // The binding constraint is whichever check is most restrictive.
-    const denied = !ipResult.allowed || (keyResult !== undefined && !keyResult.allowed);
+    const denied =
+      (ipResult !== undefined && !ipResult.allowed) ||
+      (keyResult !== undefined && !keyResult.allowed);
     const bindingResult =
-      keyResult !== undefined && !keyResult.allowed ? keyResult : ipResult;
+      keyResult !== undefined
+        ? keyResult
+        : (ipResult as RateLimitResult);
 
     // ---- Standard rate-limit response headers ----------------------------
     reply.header("X-RateLimit-Limit", String(bindingResult.limit));

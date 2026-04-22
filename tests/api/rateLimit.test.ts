@@ -11,6 +11,7 @@ describe("Rate Limiting", () => {
   const adminApiKey = "admin_test123";
 
   beforeAll(async () => {
+    process.env.ENABLE_RATE_LIMIT_IN_TESTS = "true";
     server = await buildServer();
     await server.ready();
     
@@ -21,6 +22,7 @@ describe("Rate Limiting", () => {
   afterAll(async () => {
     await cleanupTestData();
     await server.close();
+    delete process.env.ENABLE_RATE_LIMIT_IN_TESTS;
   });
 
   async function cleanupTestData() {
@@ -106,6 +108,15 @@ describe("Rate Limiting", () => {
 
   describe("API Key Rate Limiting", () => {
     it("should apply different limits for different tiers", async () => {
+      // Baseline free-tier request
+      const freeResponse = await server.inject({
+        method: "GET",
+        url: "/api/v1/assets",
+        headers: {
+          "X-Forwarded-For": "192.168.1.99",
+        },
+      });
+
       // Test basic tier
       const basicResponse = await server.inject({
         method: "GET",
@@ -119,7 +130,7 @@ describe("Rate Limiting", () => {
       expect(basicResponse.statusCode).toBe(200);
       expect(basicResponse.headers["x-ratelimit-tier"]).toBe("basic");
       expect(parseInt(basicResponse.headers["x-ratelimit-limit"])).toBeGreaterThan(
-        parseInt(response.headers["x-ratelimit-limit"])
+        parseInt(freeResponse.headers["x-ratelimit-limit"])
       );
 
       // Test premium tier

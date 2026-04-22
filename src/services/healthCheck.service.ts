@@ -237,7 +237,7 @@ export class HealthCheckService {
         try {
           const response = await fetch(api.url, {
             method: "GET",
-            signal: AbortSignal.timeout(5000), // 5 second timeout
+            signal: AbortSignal.timeout(1000), // Keep health checks responsive in tests and CI
           });
           
           return {

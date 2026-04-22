@@ -18,7 +18,12 @@ export async function alertsRoutes(server: FastifyInstance) {
         return reply.status(400).send({ error: "owner query param required" });
       }
       const rules = await alertService.getRulesForOwner(owner);
-      return { rules };
+      return {
+        rules: rules.map((rule) => ({
+          ...rule,
+          owner_address: rule.ownerAddress,
+        })),
+      };
     }
   );
 

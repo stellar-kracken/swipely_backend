@@ -127,6 +127,7 @@ export interface PaginationOptions {
  */
 export interface PaginatedExports {
   exports: ExportRecord[];
+  length: number;
   total: number;
   page: number;
   limit: number;
