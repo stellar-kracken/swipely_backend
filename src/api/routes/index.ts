@@ -23,6 +23,7 @@ import { validationAdminRoutes } from "./validationAdmin.js";
 import { metricsRoutes } from "./metrics.js";
 import { priceFeedsRoutes } from "./priceFeeds.js";
 import { supplyChainRoutes } from "./supplyChain.js";
+import { transactionsRoutes } from "./transactions.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -51,4 +52,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(metricsRoutes, { prefix: "/metrics" });
   server.register(priceFeedsRoutes, { prefix: "/api/v1/price-feeds" });
   server.register(supplyChainRoutes, { prefix: "/api/v1/supply-chain" });
+  server.register(transactionsRoutes, { prefix: "/api/v1/transactions" });
 }
