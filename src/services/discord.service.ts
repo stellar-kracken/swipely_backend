@@ -7,8 +7,8 @@ import {
   REST,
   Routes,
   TextChannel,
-  User,
-  GuildMember
+  GuildMember,
+  ActivityType
 } from "discord.js";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
@@ -413,7 +413,7 @@ export class DiscordService {
    */
   private updatePresence(): void {
     if (this.client.user) {
-      this.client.user.setActivity("Bridge Watch", { type: "WATCHING" });
+      this.client.user.setActivity("Bridge Watch", { type: ActivityType.Watching });
     }
   }
 

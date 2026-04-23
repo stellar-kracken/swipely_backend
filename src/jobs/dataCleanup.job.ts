@@ -477,8 +477,15 @@ export class DataCleanupJob {
    * Run cleanup manually
    */
   async runCleanup(dryRun = false, force = false): Promise<CleanupMetrics> {
-    const { Queue } = await import("bullmq");
+    const { Queue, QueueEvents } = await import("bullmq");
     const queue = new Queue("data-cleanup", {
+      connection: {
+        host: config.REDIS_HOST,
+        port: config.REDIS_PORT,
+      },
+    });
+
+    const queueEvents = new QueueEvents("data-cleanup", {
       connection: {
         host: config.REDIS_HOST,
         port: config.REDIS_PORT,
@@ -488,7 +495,10 @@ export class DataCleanupJob {
     const job = await queue.add("manual-cleanup", { dryRun, force });
     
     // Wait for job completion
-    const result = await job.waitUntilFinished(queue);
+    const result = await job.waitUntilFinished(queueEvents);
+    
+    // Clean up queue events
+    await queueEvents.close();
     
     return result as CleanupMetrics;
   }

@@ -258,7 +258,7 @@ export async function discordRoutes(server: FastifyInstance) {
         const { guildId, days, type } = request.query;
         const db = getDatabase();
 
-        let data = {};
+        const data: { commandStats?: unknown[]; alertStats?: unknown[] } = {};
 
         if (!type || type === "commands") {
           const commandQuery = db("discord_command_stats");

@@ -5,12 +5,10 @@ import { websocketRoutes } from "./websocket.js";
 import { alertsRoutes } from "./alerts.js";
 import { exportsRoutes } from "./exports.js";
 import { circuitBreakerRoutes } from "./circuitBreaker.js";
-<<<<<<< Updated upstream
 import { preferencesRoutes } from "./preferences.js";
 import { apiKeysRoutes } from "./apiKeys.js";
 import jobsRoutes from "./jobs.js";
 import { webhooksRoutes } from "./webhooks.js";
-
 import { configRoutes } from "./config.js";
 import { aggregationRoutes } from "./aggregation.js";
 import { metadataRoutes } from "./metadata.js";
@@ -26,12 +24,10 @@ import { priceFeedsRoutes } from "./priceFeeds.js";
 import { supplyChainRoutes } from "./supplyChain.js";
 import { transactionsRoutes } from "./transactions.js";
 import { balanceRoutes } from "./balances.js";
-=======
 import { poolRoutes } from "./pools.routes.js";
 import { searchRoutes } from "./search.routes.js";
 import { cleanupRoutes } from "./cleanup.routes.js";
 import { discordRoutes } from "./discord.routes.js";
->>>>>>> Stashed changes
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -40,7 +36,6 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(alertsRoutes, { prefix: "/api/v1/alerts" });
   server.register(exportsRoutes, { prefix: "/api/v1/exports" });
   server.register(circuitBreakerRoutes, { prefix: "/api/v1/circuit-breaker" });
-<<<<<<< Updated upstream
   server.register(preferencesRoutes, { prefix: "/api/v1/preferences" });
   server.register(apiKeysRoutes, { prefix: "/api/v1/admin/api-keys" });
   server.register(jobsRoutes, { prefix: "/api/v1/jobs" });
@@ -62,10 +57,8 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(supplyChainRoutes, { prefix: "/api/v1/supply-chain" });
   server.register(transactionsRoutes, { prefix: "/api/v1/transactions" });
   server.register(balanceRoutes, { prefix: "/api/v1/balances" });
-=======
   server.register(poolRoutes, { prefix: "/api/v1/pools" });
   server.register(searchRoutes, { prefix: "/api/v1/search" });
   server.register(cleanupRoutes, { prefix: "/api/v1/cleanup" });
   server.register(discordRoutes, { prefix: "/api/v1/discord" });
->>>>>>> Stashed changes
 }

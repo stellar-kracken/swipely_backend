@@ -115,30 +115,31 @@ export async function up(knex: Knex): Promise<void> {
 
   // Create function to estimate cleanup impact
   await knex.raw(`
-    CREATE OR REPLACE FUNCTION estimate_cleanup_impact(table_name TEXT, retention_days INTEGER)
+    CREATE OR REPLACE FUNCTION estimate_cleanup_impact(p_table_name TEXT, p_retention_days INTEGER)
     RETURNS TABLE(
       total_records BIGINT,
       records_to_delete BIGINT,
       estimated_size_to_free BIGINT,
       cutoff_date TIMESTAMP
     ) AS $$
+    DECLARE
+      v_total_records BIGINT;
+      v_records_to_delete BIGINT;
+      v_sql TEXT;
     BEGIN
-      RETURN QUERY
-      SELECT 
-        COUNT(*) as total_records,
-        COUNT(*) FILTER (WHERE time < NOW() - INTERVAL '1 day' * retention_days) as records_to_delete,
-        (COUNT(*) FILTER (WHERE time < NOW() - INTERVAL '1 day' * retention_days)) * 1024 as estimated_size_to_free,
-        NOW() - INTERVAL '1 day' * retention_days as cutoff_date
-      FROM information_schema.columns c
-      LEFT JOIN LATERAL (
-        SELECT time FROM ${table_name} LIMIT 1
-      ) t ON true
-      WHERE c.table_name = table_name;
+      -- Build dynamic SQL to count from the specified table
+      v_sql := format('SELECT COUNT(*) FROM %I', p_table_name);
+      EXECUTE v_sql INTO v_total_records;
       
-      -- If the table doesn't have a time column, return zeros
-      IF NOT FOUND THEN
-        RETURN QUERY SELECT 0, 0, 0, NOW() - INTERVAL '1 day' * retention_days;
-      END IF;
+      -- Build dynamic SQL to count records to delete
+      v_sql := format('SELECT COUNT(*) FROM %I WHERE time < NOW() - INTERVAL ''1 day'' * $1', p_table_name);
+      EXECUTE v_sql INTO v_records_to_delete USING p_retention_days;
+      
+      RETURN QUERY SELECT 
+        v_total_records as total_records,
+        v_records_to_delete as records_to_delete,
+        (v_records_to_delete * 1024) as estimated_size_to_free,
+        (NOW() - INTERVAL '1 day' * p_retention_days) as cutoff_date;
     END;
     $$ LANGUAGE plpgsql
   `);
