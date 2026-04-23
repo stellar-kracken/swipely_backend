@@ -40,7 +40,7 @@ export async function auditRoutes(server: FastifyInstance) {
 
   server.get<{ Querystring: AuditQuerystring }>(
     "/",
-    { preHandler: requireAuditRead },
+    { preHandler: requireAuditRead, config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest<{ Querystring: AuditQuerystring }>, reply: FastifyReply) => {
       try {
         const q: AuditQuery = {
@@ -70,7 +70,7 @@ export async function auditRoutes(server: FastifyInstance) {
 
   server.get<{ Params: AuditIdParams }>(
     "/:id",
-    { preHandler: requireAuditRead },
+    { preHandler: requireAuditRead, config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
     async (request: FastifyRequest<{ Params: AuditIdParams }>, reply: FastifyReply) => {
       const entry = await auditService.getEntry(request.params.id);
       if (!entry) {
@@ -88,7 +88,7 @@ export async function auditRoutes(server: FastifyInstance) {
 
   server.get<{ Querystring: { from?: string } }>(
     "/stats",
-    { preHandler: requireAuditRead },
+    { preHandler: requireAuditRead, config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest<{ Querystring: { from?: string } }>, reply: FastifyReply) => {
       try {
         const from = request.query.from ? new Date(request.query.from) : undefined;
@@ -107,7 +107,7 @@ export async function auditRoutes(server: FastifyInstance) {
 
   server.get<{ Querystring: AuditQuerystring }>(
     "/export",
-    { preHandler: requireAuditAdmin },
+    { preHandler: requireAuditAdmin, config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
     async (request: FastifyRequest<{ Querystring: AuditQuerystring }>, reply: FastifyReply) => {
       try {
         const q: AuditQuery = {
@@ -138,7 +138,7 @@ export async function auditRoutes(server: FastifyInstance) {
 
   server.get<{ Params: AuditIdParams }>(
     "/:id/verify",
-    { preHandler: requireAuditRead },
+    { preHandler: requireAuditRead, config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
     async (request: FastifyRequest<{ Params: AuditIdParams }>, reply: FastifyReply) => {
       const entry = await auditService.getEntry(request.params.id);
       if (!entry) {
@@ -159,7 +159,7 @@ export async function auditRoutes(server: FastifyInstance) {
 
   server.post<{ Body: RetentionBody }>(
     "/retention",
-    { preHandler: requireAuditAdmin },
+    { preHandler: requireAuditAdmin, config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
     async (request: FastifyRequest<{ Body: RetentionBody }>, reply: FastifyReply) => {
       try {
         const { retentionDays } = request.body;
