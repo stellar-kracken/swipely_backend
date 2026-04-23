@@ -1,4 +1,44 @@
 import type { FastifyDynamicSwaggerOptions } from "@fastify/swagger";
+import type { FastifySchema } from "fastify";
+
+const DEFAULT_ERROR_RESPONSE = {
+  type: "object",
+  properties: {
+    error: { type: "string", example: "Internal Server Error" },
+    message: { type: "string", example: "Unexpected error while processing request" },
+  },
+};
+
+function resolveTagFromPath(url: string): string {
+  if (url.startsWith("/api/v1/alerts")) return "Alerts";
+  if (url.startsWith("/api/v1/assets")) return "Assets";
+  if (url.startsWith("/api/v1/bridges")) return "Bridges";
+  if (url.startsWith("/api/v1/analytics")) return "Analytics";
+  if (url.startsWith("/api/v1/aggregation")) return "Aggregation";
+  if (url.startsWith("/api/v1/metadata")) return "Metadata";
+  if (url.startsWith("/api/v1/watchlists")) return "Watchlists";
+  if (url.startsWith("/api/v1/preferences")) return "Preferences";
+  if (url.startsWith("/api/v1/jobs")) return "Jobs";
+  if (url.startsWith("/api/v1/config")) return "Config";
+  if (url.startsWith("/api/v1/cache")) return "Cache";
+  if (url.startsWith("/api/v1/circuit-breaker")) return "Circuit Breaker";
+  if (url.startsWith("/api/v1/price-feeds")) return "Assets";
+  if (url.startsWith("/api/v1/supply-chain")) return "Assets";
+  if (url.startsWith("/api/v1/transactions")) return "Assets";
+  if (url.startsWith("/api/v1/balances")) return "Assets";
+  if (url.startsWith("/api/v1/webhooks")) return "Alerts";
+  if (url.startsWith("/api/v1/admin")) return "Config";
+  if (url.startsWith("/api/v1/health") || url.startsWith("/health")) return "Health";
+  return "Config";
+}
+
+function isProtectedPath(url: string): boolean {
+  return (
+    url.startsWith("/api/v1/alerts") ||
+    url.startsWith("/api/v1/admin") ||
+    url.startsWith("/api/v1/jobs")
+  );
+}
 
 export const swaggerOptions: FastifyDynamicSwaggerOptions = {
   openapi: {
@@ -129,6 +169,41 @@ least 90 days after a new version is released.
       { name: "Cache", description: "Redis cache inspection and invalidation" },
       { name: "Circuit Breaker", description: "Automated circuit-breaker pause controls" },
     ],
+  },
+  transform: ({ schema, url, route }) => {
+    const routeSchema: FastifySchema = schema ?? {};
+    const method = String(route.method).toUpperCase();
+    const defaultSummary = `${method} ${url}`;
+    const mergedSchema: FastifySchema = {
+      ...routeSchema,
+      tags: routeSchema.tags ?? [resolveTagFromPath(url)],
+      summary: routeSchema.summary ?? defaultSummary,
+      description:
+        routeSchema.description ??
+        "Auto-generated endpoint documentation. Add an explicit route schema for richer request/response examples.",
+      security: routeSchema.security ?? (isProtectedPath(url) ? [{ ApiKeyAuth: [] }] : undefined),
+      response: routeSchema.response ?? {
+        200: {
+          type: "object",
+          additionalProperties: true,
+          examples: [
+            {
+              example: {
+                success: true,
+                path: url,
+                timestamp: new Date().toISOString(),
+              },
+            },
+          ],
+        },
+        500: DEFAULT_ERROR_RESPONSE,
+      },
+    };
+
+    return {
+      schema: mergedSchema,
+      url,
+    };
   },
 };
 
