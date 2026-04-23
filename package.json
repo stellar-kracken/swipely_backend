@@ -41,6 +41,7 @@
     "@types/pdfkit": "^0.17.5",
     "bullmq": "^5.13.0",
     "csv-stringify": "^6.7.0",
+    "discord.js": "^14.26.3",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.4",
     "fastify": "^5.8.4",

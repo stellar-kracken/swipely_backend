@@ -156,6 +156,10 @@ const envSchema = z.object({
   SMTP_FROM_ADDRESS: z.string().default("noreply@bridgewatch.io"),
   SMTP_FROM_NAME: z.string().default("Bridge Watch"),
 
+  // Discord Bot Configuration
+  DISCORD_BOT_TOKEN: z.string().optional(),
+  DISCORD_CLIENT_ID: z.string().optional(),
+
   // Health Check Configuration
   HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().default(5000),
   HEALTH_CHECK_INTERVAL_MS: z.coerce.number().default(30000),
