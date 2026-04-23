@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { assetsRoutes } from "./assets.js";
 import { bridgesRoutes } from "./bridges.js";
 import { websocketRoutes } from "./websocket.js";
-import { alertsRoutes } from "./alerts.js";
+import { alertsRoutes } from "./alerts.routes.js";
 import { exportsRoutes } from "./exports.js";
 import { circuitBreakerRoutes } from "./circuitBreaker.js";
 import { preferencesRoutes } from "./preferences.js";
