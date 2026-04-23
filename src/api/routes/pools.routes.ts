@@ -1,12 +1,25 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { z } from "zod";
 import { PoolService } from "../../services/pool.service.js";
 import { logger } from "../../utils/logger.js";
+import { validateRequest } from "../middleware/validation.js";
+import {
+  PoolIdParamsSchema,
+  AssetPairParamsSchema,
+  PoolEventsQuerySchema,
+  LargeLiquidityEventsQuerySchema,
+} from "../validations/pool.schema.js";
+
+type PoolIdParams = z.infer<typeof PoolIdParamsSchema>;
+type AssetPairParams = z.infer<typeof AssetPairParamsSchema>;
+type PoolEventsQuery = z.infer<typeof PoolEventsQuerySchema>;
+type LargeLiquidityEventsQuery = z.infer<typeof LargeLiquidityEventsQuerySchema>;
 
 const poolService = new PoolService();
 
 export async function poolRoutes(server: FastifyInstance) {
   // Get all liquidity pools
-  server.get("/", async (request: FastifyRequest, reply: FastifyReply) => {
+  server.get("/", async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const pools = await poolService.getAllPools();
       return { success: true, data: pools };
@@ -18,14 +31,12 @@ export async function poolRoutes(server: FastifyInstance) {
   });
 
   // Get pools for a specific asset pair
-  server.get(
+  server.get<{ Params: AssetPairParams }>(
     "/pair/:assetA/:assetB",
-    async (
-      request: FastifyRequest<{
-        Params: { assetA: string; assetB: string };
-      }>,
-      reply: FastifyReply
-    ) => {
+    {
+      preHandler: validateRequest({ params: AssetPairParamsSchema }),
+    },
+    async (request: FastifyRequest<{ Params: AssetPairParams }>, reply: FastifyReply) => {
       try {
         const { assetA, assetB } = request.params;
         const pools = await poolService.getPoolsForPair(assetA, assetB);
@@ -39,23 +50,21 @@ export async function poolRoutes(server: FastifyInstance) {
   );
 
   // Get detailed metrics for a specific pool
-  server.get(
+  server.get<{ Params: PoolIdParams }>(
     "/:poolId/metrics",
-    async (
-      request: FastifyRequest<{
-        Params: { poolId: string };
-      }>,
-      reply: FastifyReply
-    ) => {
+    {
+      preHandler: validateRequest({ params: PoolIdParamsSchema }),
+    },
+    async (request: FastifyRequest<{ Params: PoolIdParams }>, reply: FastifyReply) => {
       try {
         const { poolId } = request.params;
         const metrics = await poolService.getPoolMetrics(poolId);
-        
+
         if (!metrics) {
           reply.code(404);
           return { success: false, error: "Pool not found" };
         }
-        
+
         return { success: true, data: metrics };
       } catch (error) {
         logger.error(error, "Failed to fetch pool metrics");
@@ -66,23 +75,21 @@ export async function poolRoutes(server: FastifyInstance) {
   );
 
   // Compare pools across DEXes for the same pair
-  server.get(
+  server.get<{ Params: AssetPairParams }>(
     "/compare/:assetA/:assetB",
-    async (
-      request: FastifyRequest<{
-        Params: { assetA: string; assetB: string };
-      }>,
-      reply: FastifyReply
-    ) => {
+    {
+      preHandler: validateRequest({ params: AssetPairParamsSchema }),
+    },
+    async (request: FastifyRequest<{ Params: AssetPairParams }>, reply: FastifyReply) => {
       try {
         const { assetA, assetB } = request.params;
         const comparison = await poolService.comparePools(assetA, assetB);
-        
+
         if (!comparison) {
           reply.code(404);
           return { success: false, error: "No pools found for this pair" };
         }
-        
+
         return { success: true, data: comparison };
       } catch (error) {
         logger.error(error, "Failed to compare pools");
@@ -93,18 +100,21 @@ export async function poolRoutes(server: FastifyInstance) {
   );
 
   // Get recent pool events
-  server.get(
+  server.get<{ Params: PoolIdParams; Querystring: PoolEventsQuery }>(
     "/:poolId/events",
+    {
+      preHandler: validateRequest({
+        params: PoolIdParamsSchema,
+        query: PoolEventsQuerySchema,
+      }),
+    },
     async (
-      request: FastifyRequest<{
-        Params: { poolId: string };
-        Querystring: { limit?: string };
-      }>,
+      request: FastifyRequest<{ Params: PoolIdParams; Querystring: PoolEventsQuery }>,
       reply: FastifyReply
     ) => {
       try {
         const { poolId } = request.params;
-        const limit = request.query.limit ? parseInt(request.query.limit) : 50;
+        const { limit } = request.query;
         const events = await poolService.getPoolEvents(poolId, limit);
         return { success: true, data: events };
       } catch (error) {
@@ -116,18 +126,17 @@ export async function poolRoutes(server: FastifyInstance) {
   );
 
   // Get large liquidity events
-  server.get(
+  server.get<{ Querystring: LargeLiquidityEventsQuery }>(
     "/events/large",
+    {
+      preHandler: validateRequest({ query: LargeLiquidityEventsQuerySchema }),
+    },
     async (
-      request: FastifyRequest<{
-        Querystring: { threshold?: string };
-      }>,
+      request: FastifyRequest<{ Querystring: LargeLiquidityEventsQuery }>,
       reply: FastifyReply
     ) => {
       try {
-        const threshold = request.query.threshold 
-          ? parseFloat(request.query.threshold) 
-          : 0.1;
+        const { threshold } = request.query;
         const events = await poolService.detectLargeLiquidityEvents(threshold);
         return { success: true, data: events };
       } catch (error) {
@@ -139,11 +148,11 @@ export async function poolRoutes(server: FastifyInstance) {
   );
 
   // Health check for pool monitoring
-  server.get("/health", async (request: FastifyRequest, reply: FastifyReply) => {
+  server.get("/health", async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const pools = await poolService.getAllPools();
       const healthyPools = pools.filter(pool => pool.healthScore >= 70);
-      
+
       return {
         success: true,
         data: {
