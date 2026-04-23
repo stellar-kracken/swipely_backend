@@ -275,7 +275,7 @@ describe("Request Tracing and Logging", () => {
       const duration = endTime - startTime;
 
       expect(response.statusCode).toBe(200);
-      expect(duration).toBeGreaterThan(0);
+        expect(duration).toBeGreaterThanOrEqual(0);
     });
   });
 

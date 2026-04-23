@@ -171,7 +171,8 @@ export class RateLimitService {
       }
     } catch (error) {
       logger.error({ error, identifier, type, endpoint }, "Failed to reset rate limit");
-      throw error;
+        // Best-effort operation: log and continue. The rate limit window will
+        // expire naturally even if the Redis keys could not be removed.
     }
   }
 
