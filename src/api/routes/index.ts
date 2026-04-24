@@ -30,6 +30,7 @@ import { cleanupRoutes } from "./cleanup.routes.js";
 import { discordRoutes } from "./discord.routes.js";
 import { alertRulesRoutes } from "./alertRules.js";
 import { auditRoutes } from "./audit.js";
+import { bridgeRegistryRoutes } from "./bridge-registry.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -65,4 +66,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(discordRoutes, { prefix: "/api/v1/discord" });
   server.register(alertRulesRoutes, { prefix: "/api/v1/alert-rules" });
   server.register(auditRoutes, { prefix: "/api/v1/admin/audit" });
+  server.register(bridgeRegistryRoutes, { prefix: "/api/v1/bridge-registry" });
 }
