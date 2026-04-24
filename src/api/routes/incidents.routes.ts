@@ -1,0 +1,199 @@
+import type { FastifyInstance } from "fastify";
+import { IncidentService, type IncidentSeverity, type IncidentStatus } from "../../services/incident.service.js";
+
+const incidentService = new IncidentService();
+
+const SEVERITY_VALUES: IncidentSeverity[] = ["critical", "high", "medium", "low"];
+const STATUS_VALUES: IncidentStatus[] = ["open", "investigating", "resolved"];
+
+export async function incidentRoutes(server: FastifyInstance) {
+  // GET /api/v1/incidents — list with optional filters
+  server.get<{
+    Querystring: {
+      bridgeId?: string;
+      assetCode?: string;
+      severity?: string;
+      status?: string;
+      limit?: string;
+      offset?: string;
+    };
+  }>(
+    "/",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "List bridge incidents",
+        querystring: {
+          type: "object",
+          properties: {
+            bridgeId: { type: "string" },
+            assetCode: { type: "string" },
+            severity: { type: "string", enum: SEVERITY_VALUES },
+            status: { type: "string", enum: STATUS_VALUES },
+            limit: { type: "string" },
+            offset: { type: "string" },
+          },
+        },
+        response: {
+          200: { type: "object", additionalProperties: true },
+        },
+      },
+    },
+    async (request, _reply) => {
+      const { bridgeId, assetCode, severity, status, limit, offset } = request.query;
+      return incidentService.listIncidents({
+        bridgeId,
+        assetCode,
+        severity: severity as IncidentSeverity | undefined,
+        status: status as IncidentStatus | undefined,
+        limit: limit ? Number(limit) : undefined,
+        offset: offset ? Number(offset) : undefined,
+      });
+    }
+  );
+
+  // GET /api/v1/incidents/:id — get single incident
+  server.get<{ Params: { id: string } }>(
+    "/:id",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "Get a bridge incident by ID",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+        response: {
+          200: { type: "object", additionalProperties: true },
+          404: { $ref: "Error#" },
+        },
+      },
+    },
+    async (request, reply) => {
+      const incident = await incidentService.getIncident(request.params.id);
+      if (!incident) return reply.status(404).send({ error: "Incident not found" });
+      return incident;
+    }
+  );
+
+  // POST /api/v1/incidents — create an incident
+  server.post<{
+    Body: {
+      bridgeId: string;
+      assetCode?: string;
+      severity: IncidentSeverity;
+      title: string;
+      description: string;
+      sourceUrl?: string;
+      followUpActions?: string[];
+      occurredAt?: string;
+    };
+  }>(
+    "/",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "Create a bridge incident",
+        body: {
+          type: "object",
+          required: ["bridgeId", "severity", "title", "description"],
+          properties: {
+            bridgeId: { type: "string" },
+            assetCode: { type: "string" },
+            severity: { type: "string", enum: SEVERITY_VALUES },
+            title: { type: "string" },
+            description: { type: "string" },
+            sourceUrl: { type: "string" },
+            followUpActions: { type: "array", items: { type: "string" } },
+            occurredAt: { type: "string" },
+          },
+        },
+        response: {
+          201: { type: "object", additionalProperties: true },
+        },
+      },
+    },
+    async (request, reply) => {
+      const incident = await incidentService.createIncident(request.body);
+      return reply.status(201).send(incident);
+    }
+  );
+
+  // PATCH /api/v1/incidents/:id/status — update status
+  server.patch<{ Params: { id: string }; Body: { status: IncidentStatus } }>(
+    "/:id/status",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "Update incident status",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+        body: {
+          type: "object",
+          required: ["status"],
+          properties: { status: { type: "string", enum: STATUS_VALUES } },
+        },
+        response: {
+          200: { type: "object", additionalProperties: true },
+          404: { $ref: "Error#" },
+        },
+      },
+    },
+    async (request, reply) => {
+      const updated = await incidentService.updateIncidentStatus(request.params.id, request.body.status);
+      if (!updated) return reply.status(404).send({ error: "Incident not found" });
+      return updated;
+    }
+  );
+
+  // POST /api/v1/incidents/:id/read — mark as read for a session
+  server.post<{ Params: { id: string }; Body: { userSession: string } }>(
+    "/:id/read",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "Mark an incident as read",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+        body: {
+          type: "object",
+          required: ["userSession"],
+          properties: { userSession: { type: "string" } },
+        },
+        response: { 200: { type: "object", additionalProperties: true } },
+      },
+    },
+    async (request, _reply) => {
+      await incidentService.markRead(request.params.id, request.body.userSession);
+      return { ok: true };
+    }
+  );
+
+  // GET /api/v1/incidents/unread/count?userSession=xxx
+  server.get<{ Querystring: { userSession: string } }>(
+    "/unread/count",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "Get unread incident count for a session",
+        querystring: {
+          type: "object",
+          required: ["userSession"],
+          properties: { userSession: { type: "string" } },
+        },
+        response: { 200: { type: "object", additionalProperties: true } },
+      },
+    },
+    async (request, _reply) => {
+      const count = await incidentService.getUnreadCount(request.query.userSession);
+      return { count };
+    }
+  );
+}
