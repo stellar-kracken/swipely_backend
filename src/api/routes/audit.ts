@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import "@fastify/rate-limit";
 import { auditService, type AuditAction, type AuditSeverity, type AuditQuery } from "../../services/audit.service.js";
 import { authMiddleware } from "../middleware/auth.js";
 
