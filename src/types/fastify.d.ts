@@ -27,4 +27,12 @@ declare module "fastify" {
   interface RouteShorthandOptions {
     websocket?: boolean;
   }
+
+  interface FastifyContextConfig {
+    rateLimit?: {
+      max?: number;
+      timeWindow?: string | number;
+      skip?: (request: FastifyRequest) => boolean | Promise<boolean>;
+    };
+  }
 }

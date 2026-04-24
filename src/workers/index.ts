@@ -6,6 +6,7 @@ import { processBridgeVerification } from "./bridgeVerification.job.js";
 import { processAnalyticsAggregation } from "./analyticsAggregation.worker.js";
 import { logger } from "../utils/logger.js";
 import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
+import { runAuditRetentionJob } from "../jobs/auditRetention.job.js";
 
 export async function initJobSystem() {
   const jobQueue = JobQueue.getInstance();
@@ -24,6 +25,9 @@ export async function initJobSystem() {
         break;
       case "analytics-aggregation":
         await processAnalyticsAggregation(job);
+        break;
+      case "audit-retention":
+        await runAuditRetentionJob(job.data.retentionDays);
         break;
       default:
         logger.warn({ jobName: job.name }, "Unknown job name in worker");
@@ -74,6 +78,9 @@ export async function initJobSystem() {
     type: "top-performers",
     params: { performerType: "bridges", metric: "tvl", limit: 10 }
   }, "*/5 * * * *");
+
+  // Audit log retention: daily at 02:00 UTC, keep 90 days of info-level entries
+  await jobQueue.addRepeatableJob("audit-retention", { retentionDays: 90 }, "0 2 * * *");
 
   logger.info("Scheduled job system initialized");
 }
