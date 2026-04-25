@@ -23,6 +23,15 @@ export interface AssetMetadata {
   category: string | null;
   tags: string[];
   version: number;
+  sync_enabled?: boolean;
+  manual_override?: boolean;
+  override_reason?: string | null;
+  override_updated_by?: string | null;
+  last_synced_at?: Date | null;
+  last_sync_status?: string;
+  last_sync_error?: string | null;
+  source_priority?: string[];
+  image_last_validated_at?: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -76,6 +85,9 @@ export class AssetMetadataService {
         social_links: JSON.parse(metadata.social_links || "{}"),
         token_specifications: JSON.parse(metadata.token_specifications || "{}"),
         tags: JSON.parse(metadata.tags || "[]"),
+        source_priority: Array.isArray(metadata.source_priority)
+          ? metadata.source_priority
+          : JSON.parse((metadata.source_priority as unknown as string) || "[]"),
       };
     } catch (error) {
       logger.error({ error, assetId }, "Failed to get asset metadata");
@@ -101,6 +113,9 @@ export class AssetMetadataService {
         social_links: JSON.parse(metadata.social_links || "{}"),
         token_specifications: JSON.parse(metadata.token_specifications || "{}"),
         tags: JSON.parse(metadata.tags || "[]"),
+        source_priority: Array.isArray(metadata.source_priority)
+          ? metadata.source_priority
+          : JSON.parse((metadata.source_priority as unknown as string) || "[]"),
       };
     } catch (error) {
       logger.error({ error, symbol }, "Failed to get asset metadata by symbol");
@@ -244,6 +259,9 @@ export class AssetMetadataService {
           (metadata.token_specifications as unknown as string) || "{}",
         ),
         tags: JSON.parse((metadata.tags as unknown as string) || "[]"),
+        source_priority: Array.isArray(metadata.source_priority)
+          ? metadata.source_priority
+          : JSON.parse((metadata.source_priority as unknown as string) || "[]"),
       }));
     } catch (error) {
       logger.error({ error }, "Failed to get all asset metadata");
@@ -271,6 +289,9 @@ export class AssetMetadataService {
           (metadata.token_specifications as unknown as string) || "{}",
         ),
         tags: JSON.parse((metadata.tags as unknown as string) || "[]"),
+        source_priority: Array.isArray(metadata.source_priority)
+          ? metadata.source_priority
+          : JSON.parse((metadata.source_priority as unknown as string) || "[]"),
       }));
     } catch (error) {
       logger.error({ error, category }, "Failed to get metadata by category");
@@ -300,6 +321,9 @@ export class AssetMetadataService {
           (metadata.token_specifications as unknown as string) || "{}",
         ),
         tags: JSON.parse((metadata.tags as unknown as string) || "[]"),
+        source_priority: Array.isArray(metadata.source_priority)
+          ? metadata.source_priority
+          : JSON.parse((metadata.source_priority as unknown as string) || "[]"),
       }));
     } catch (error) {
       logger.error({ error, query }, "Failed to search metadata");
@@ -388,6 +412,42 @@ export class AssetMetadataService {
       logger.error({ error, assetId }, "Failed to delete asset metadata");
       throw error;
     }
+  }
+
+  async setManualOverride(
+    assetId: string,
+    override: boolean,
+    reason: string | null,
+    changedBy: string,
+  ): Promise<void> {
+    const db = getDatabase();
+
+    const existing = await db("asset_metadata").where({ asset_id: assetId }).first();
+    if (!existing) {
+      throw new Error("Metadata not found");
+    }
+
+    const nextVersion = Number(existing.version) + 1;
+
+    await db("asset_metadata")
+      .where({ asset_id: assetId })
+      .update({
+        manual_override: override,
+        override_reason: override ? reason : null,
+        override_updated_by: changedBy,
+        version: nextVersion,
+        updated_at: new Date(),
+      });
+
+    await this.logVersion(
+      existing.id,
+      nextVersion,
+      {
+        manual_override: override,
+        override_reason: override ? reason : null,
+      },
+      changedBy,
+    );
   }
 
   // ─── Private Methods ─────────────────────────────────────────────────────

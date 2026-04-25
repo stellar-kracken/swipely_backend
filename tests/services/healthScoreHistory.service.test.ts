@@ -3,22 +3,25 @@ import { HealthScoreHistoryService } from "../../src/services/healthScoreHistory
 
 vi.mock("../../src/database/connection.js", () => ({
   getDatabase: vi.fn(() => {
-    const chain = (rows: unknown[] = []) => ({
-      where: vi.fn().mockReturnThis(),
-      whereBetween: vi.fn().mockReturnThis(),
-      whereNotIn: vi.fn().mockReturnThis(),
-      whereIn: vi.fn().mockReturnThis(),
-      orderBy: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      offset: vi.fn().mockReturnThis(),
-      first: vi.fn().mockResolvedValue(rows[0] ?? undefined),
-      select: vi.fn().mockResolvedValue(rows),
-      insert: vi.fn().mockReturnThis(),
-      onConflict: vi.fn().mockReturnThis(),
-      ignore: vi.fn().mockResolvedValue(undefined),
-      returning: vi.fn().mockResolvedValue(rows),
-      delete: vi.fn().mockResolvedValue(0),
-    });
+    const chain = (rows: unknown[] = []) => {
+      const qb: Record<string, unknown> = {
+        where: vi.fn().mockReturnThis(),
+        whereBetween: vi.fn().mockReturnThis(),
+        whereNotIn: vi.fn().mockReturnThis(),
+        whereIn: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue(rows),
+        offset: vi.fn().mockReturnThis(),
+        first: vi.fn().mockResolvedValue(rows[0] ?? undefined),
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        onConflict: vi.fn().mockReturnThis(),
+        ignore: vi.fn().mockResolvedValue(undefined),
+        returning: vi.fn().mockResolvedValue(rows),
+        delete: vi.fn().mockResolvedValue(0),
+      };
+      return qb;
+    };
 
     const fn = (_table: string) => chain([]);
     fn.raw = vi.fn().mockResolvedValue({ rows: [] });

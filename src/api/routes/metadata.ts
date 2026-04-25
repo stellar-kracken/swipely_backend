@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { assetMetadataService } from "../../services/assetMetadata.service";
+import { assetMetadataSyncService } from "../../services/assetMetadataSync.service.js";
 
 const metadataBodySchema = {
   type: "object",
@@ -17,6 +18,164 @@ const metadataBodySchema = {
 };
 
 export async function metadataRoutes(server: FastifyInstance) {
+  server.post<{
+    Body: {
+      symbols?: string[];
+      fields?: Array<
+        | "logo_url"
+        | "description"
+        | "website_url"
+        | "documentation_url"
+        | "category"
+        | "tags"
+        | "social_links"
+        | "token_specifications"
+      >;
+      force?: boolean;
+      triggeredBy?: string;
+    };
+  }>(
+    "/admin/sync",
+    {
+      schema: {
+        tags: ["Metadata"],
+        summary: "Run asset metadata sync job",
+        body: {
+          type: "object",
+          properties: {
+            symbols: { type: "array", items: { type: "string" } },
+            fields: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: [
+                  "logo_url",
+                  "description",
+                  "website_url",
+                  "documentation_url",
+                  "category",
+                  "tags",
+                  "social_links",
+                  "token_specifications",
+                ],
+              },
+            },
+            force: { type: "boolean" },
+            triggeredBy: { type: "string" },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              total: { type: "integer" },
+              results: { type: "array", items: { type: "object", additionalProperties: true } },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await assetMetadataSyncService.syncAll({
+        symbols: request.body.symbols,
+        fields: request.body.fields,
+        force: request.body.force,
+        triggeredBy: request.body.triggeredBy ?? "admin-api",
+      });
+
+      return reply.code(200).send(result);
+    },
+  );
+
+  server.post<{
+    Params: { assetId: string };
+    Body: { override: boolean; reason?: string; changedBy: string };
+  }>(
+    "/:assetId/override",
+    {
+      schema: {
+        tags: ["Metadata"],
+        summary: "Set or clear metadata manual override",
+        params: {
+          type: "object",
+          required: ["assetId"],
+          properties: { assetId: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          required: ["override", "changedBy"],
+          properties: {
+            override: { type: "boolean" },
+            reason: { type: "string" },
+            changedBy: { type: "string" },
+          },
+        },
+        response: {
+          200: { type: "object", properties: { message: { type: "string" } } },
+          404: { $ref: "Error#" },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        await assetMetadataSyncService.setManualOverride(
+          request.params.assetId,
+          request.body.override,
+          request.body.reason ?? null,
+          request.body.changedBy,
+        );
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        if (message.includes("not found")) {
+          return reply.code(404).send({ error: message });
+        }
+        throw error;
+      }
+
+      return reply.code(200).send({ message: "Manual override updated" });
+    },
+  );
+
+  server.get<{ Params: { symbol: string }; Querystring: { limit?: number } }>(
+    "/symbol/:symbol/sync-history",
+    {
+      schema: {
+        tags: ["Metadata"],
+        summary: "Get metadata sync history for a symbol",
+        params: {
+          type: "object",
+          required: ["symbol"],
+          properties: { symbol: { type: "string", example: "USDC" } },
+        },
+        querystring: {
+          type: "object",
+          properties: {
+            limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              symbol: { type: "string" },
+              history: { type: "array", items: { type: "object", additionalProperties: true } },
+            },
+          },
+        },
+      },
+    },
+    async (request, _reply) => {
+      const history = await assetMetadataSyncService.getSyncHistory(
+        request.params.symbol,
+        request.query.limit ?? 50,
+      );
+      return {
+        symbol: request.params.symbol.toUpperCase(),
+        history,
+      };
+    },
+  );
+
   server.get(
     "/",
     {

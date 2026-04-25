@@ -6,6 +6,7 @@ import { processBridgeVerification } from "./bridgeVerification.job.js";
 import { processAnalyticsAggregation } from "./analyticsAggregation.worker.js";
 import { processMetricsRollup } from "./metricsRollup.worker.js";
 import { processDigestScheduler } from "./digestScheduler.worker.js";
+import { processMetadataSync } from "./metadataSync.job.js";
 import { logger } from "../utils/logger.js";
 import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
 import { runAuditRetentionJob } from "../jobs/auditRetention.job.js";
@@ -39,6 +40,9 @@ export async function initJobSystem() {
         break;
       case "digest-scheduler-weekly":
         await processDigestScheduler(job);
+        break;
+      case "metadata-sync":
+        await processMetadataSync(job);
         break;
       default:
         logger.warn({ jobName: job.name }, "Unknown job name in worker");
@@ -102,6 +106,9 @@ export async function initJobSystem() {
   
   // Weekly digest: every hour on Monday (service will check user preferences)
   await jobQueue.addRepeatableJob("digest-scheduler-weekly", { digestType: "weekly" }, "0 * * * 1");
+
+  // Metadata sync: every 4 hours
+  await jobQueue.addRepeatableJob("metadata-sync", {}, "0 */4 * * *");
 
   logger.info("Scheduled job system initialized");
 }
