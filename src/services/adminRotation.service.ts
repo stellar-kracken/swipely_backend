@@ -173,13 +173,13 @@ export class AdminRotationService {
 
     // Log to audit service
     await this.auditService.log({
-      action: "admin.added",
+      action: "admin.user_permission_changed",
       actorId: input.addedBy,
       actorType: "user",
       resourceType: "admin_account",
       resourceId: admin.id,
       after: { address: admin.address, roles: admin.roles },
-      severity: "high",
+      severity: "critical",
     });
 
     logger.info(
@@ -234,7 +234,7 @@ export class AdminRotationService {
 
     // Log to audit service
     await this.auditService.log({
-      action: "admin.removed",
+      action: "admin.user_permission_changed",
       actorId: input.removedBy,
       actorType: "user",
       resourceType: "admin_account",
@@ -290,14 +290,14 @@ export class AdminRotationService {
 
     // Log to audit service
     await this.auditService.log({
-      action: "admin.role_changed",
+      action: "admin.user_permission_changed",
       actorId: input.changedBy,
       actorType: "user",
       resourceType: "admin_account",
       resourceId: admin.id,
       before: { roles: admin.roles },
       after: { roles: updatedAdmin.roles },
-      severity: "high",
+      severity: "critical",
     });
 
     logger.info(
