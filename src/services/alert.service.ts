@@ -2,6 +2,10 @@ import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
 import { circuitBreakerQueue } from "../workers/circuitBreaker.worker.js";
 import { getMetricsService } from "./metrics.service.js";
+import {
+  alertSuppressionService,
+  type AlertSuppressionService,
+} from "./alertSuppression.service.js";
 
 export type AlertType =
   | "price_deviation"
@@ -58,6 +62,11 @@ export interface MetricSnapshot {
 }
 
 export class AlertService {
+  constructor(
+    private readonly suppressionService: Pick<AlertSuppressionService, "shouldSuppress"> =
+      alertSuppressionService
+  ) {}
+
   async createRule(
     ownerAddress: string,
     name: string,
@@ -278,6 +287,28 @@ export class AlertService {
         this.evaluateConditions(rule, snapshot.metrics);
 
       if (fires) {
+        const suppressionDecision = await this.suppressionService.shouldSuppress({
+          assetCode: snapshot.assetCode,
+          alertType,
+          priority: rule.priority,
+          source: metric,
+          at: now,
+        });
+
+        if (suppressionDecision.suppressed) {
+          logger.info(
+            {
+              ruleId: rule.id,
+              suppressionRuleId: suppressionDecision.matchedRule?.id,
+              assetCode: snapshot.assetCode,
+              alertType,
+              priority: rule.priority,
+            },
+            "Alert was suppressed before dispatch"
+          );
+          continue;
+        }
+
         const event: AlertEvent = {
           ruleId: rule.id,
           assetCode: snapshot.assetCode,
