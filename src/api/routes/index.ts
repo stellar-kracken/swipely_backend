@@ -31,6 +31,8 @@ import { discordRoutes } from "./discord.routes.js";
 import { alertRulesRoutes } from "./alertRules.js";
 import { auditRoutes } from "./audit.js";
 import { bridgeRegistryRoutes } from "./bridge-registry.routes.js";
+import { adminRotationRoutes } from "./adminRotation.js";
+import { digestSchedulerRoutes } from "./digestScheduler.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -67,4 +69,6 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(alertRulesRoutes, { prefix: "/api/v1/alert-rules" });
   server.register(auditRoutes, { prefix: "/api/v1/admin/audit" });
   server.register(bridgeRegistryRoutes, { prefix: "/api/v1/bridge-registry" });
+  server.register(adminRotationRoutes, { prefix: "/api/v1/admin/rotation" });
+  server.register(digestSchedulerRoutes, { prefix: "/api/v1/digest" });
 }
