@@ -13,6 +13,16 @@ export interface BridgeIncident {
   title: string;
   description: string;
   sourceUrl: string | null;
+  sourceType: string | null;
+  sourceExternalId: string | null;
+  sourceRepository: string | null;
+  sourceRepoAvatarUrl: string | null;
+  sourceActor: string | null;
+  sourceAttribution: Record<string, unknown>;
+  requiresManualReview: boolean;
+  ingestionAttemptCount: number;
+  lastIngestionError: string | null;
+  normalizedFingerprint: string | null;
   followUpActions: string[];
   occurredAt: string;
   resolvedAt: string | null;
@@ -36,6 +46,12 @@ export interface CreateIncidentPayload {
   title: string;
   description: string;
   sourceUrl?: string;
+  sourceType?: string;
+  sourceExternalId?: string;
+  sourceRepository?: string;
+  sourceRepoAvatarUrl?: string;
+  sourceActor?: string;
+  sourceAttribution?: Record<string, unknown>;
   followUpActions?: string[];
   occurredAt?: string;
 }
@@ -78,6 +94,12 @@ export class IncidentService {
         title: payload.title,
         description: payload.description,
         source_url: payload.sourceUrl ?? null,
+        source_type: payload.sourceType ?? null,
+        source_external_id: payload.sourceExternalId ?? null,
+        source_repository: payload.sourceRepository ?? null,
+        source_repo_avatar_url: payload.sourceRepoAvatarUrl ?? null,
+        source_actor: payload.sourceActor ?? null,
+        source_attribution: JSON.stringify(payload.sourceAttribution ?? {}),
         follow_up_actions: JSON.stringify(payload.followUpActions ?? []),
         occurred_at: payload.occurredAt ? new Date(payload.occurredAt) : new Date(),
       })
@@ -115,6 +137,10 @@ export class IncidentService {
     return Number(count);
   }
 
+  mapDatabaseRow(row: Record<string, unknown>): BridgeIncident {
+    return this.mapRow(row);
+  }
+
   private mapRow(row: Record<string, unknown>): BridgeIncident {
     return {
       id: row.id as string,
@@ -125,6 +151,18 @@ export class IncidentService {
       title: row.title as string,
       description: row.description as string,
       sourceUrl: (row.source_url as string | null) ?? null,
+      sourceType: (row.source_type as string | null) ?? null,
+      sourceExternalId: (row.source_external_id as string | null) ?? null,
+      sourceRepository: (row.source_repository as string | null) ?? null,
+      sourceRepoAvatarUrl: (row.source_repo_avatar_url as string | null) ?? null,
+      sourceActor: (row.source_actor as string | null) ?? null,
+      sourceAttribution: typeof row.source_attribution === "object" && row.source_attribution !== null
+        ? (row.source_attribution as Record<string, unknown>)
+        : JSON.parse((row.source_attribution as string) || "{}"),
+      requiresManualReview: Boolean(row.requires_manual_review),
+      ingestionAttemptCount: Number(row.ingestion_attempt_count ?? 0),
+      lastIngestionError: (row.last_ingestion_error as string | null) ?? null,
+      normalizedFingerprint: (row.normalized_fingerprint as string | null) ?? null,
       followUpActions: Array.isArray(row.follow_up_actions)
         ? (row.follow_up_actions as string[])
         : JSON.parse((row.follow_up_actions as string) || "[]"),
