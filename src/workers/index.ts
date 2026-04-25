@@ -4,6 +4,7 @@ import { processPriceCollection } from "./priceCollection.job.js";
 import { processHealthCalculation } from "./healthCalculation.job.js";
 import { processBridgeVerification } from "./bridgeVerification.job.js";
 import { processAnalyticsAggregation } from "./analyticsAggregation.worker.js";
+import { processDigestScheduler } from "./digestScheduler.worker.js";
 import { logger } from "../utils/logger.js";
 import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
 import { runAuditRetentionJob } from "../jobs/auditRetention.job.js";
@@ -28,6 +29,12 @@ export async function initJobSystem() {
         break;
       case "audit-retention":
         await runAuditRetentionJob(job.data.retentionDays);
+        break;
+      case "digest-scheduler-daily":
+        await processDigestScheduler(job);
+        break;
+      case "digest-scheduler-weekly":
+        await processDigestScheduler(job);
         break;
       default:
         logger.warn({ jobName: job.name }, "Unknown job name in worker");
@@ -81,6 +88,13 @@ export async function initJobSystem() {
 
   // Audit log retention: daily at 02:00 UTC, keep 90 days of info-level entries
   await jobQueue.addRepeatableJob("audit-retention", { retentionDays: 90 }, "0 2 * * *");
+
+  // Digest scheduler jobs
+  // Daily digest: every hour (service will check user preferences and timezone)
+  await jobQueue.addRepeatableJob("digest-scheduler-daily", { digestType: "daily" }, "0 * * * *");
+  
+  // Weekly digest: every hour on Monday (service will check user preferences)
+  await jobQueue.addRepeatableJob("digest-scheduler-weekly", { digestType: "weekly" }, "0 * * * 1");
 
   logger.info("Scheduled job system initialized");
 }
