@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { IncidentService, type IncidentSeverity, type IncidentStatus } from "../../services/incident.service.js";
+import { IncidentIngestionService, type RawIncidentPayload } from "../../services/incidentIngestion.service.js";
 
 const incidentService = new IncidentService();
+const incidentIngestionService = new IncidentIngestionService();
 
 const SEVERITY_VALUES: IncidentSeverity[] = ["critical", "high", "medium", "low"];
 const STATUS_VALUES: IncidentStatus[] = ["open", "investigating", "resolved"];
@@ -86,6 +88,12 @@ export async function incidentRoutes(server: FastifyInstance) {
       title: string;
       description: string;
       sourceUrl?: string;
+      sourceType?: string;
+      sourceExternalId?: string;
+      sourceRepository?: string;
+      sourceRepoAvatarUrl?: string;
+      sourceActor?: string;
+      sourceAttribution?: Record<string, unknown>;
       followUpActions?: string[];
       occurredAt?: string;
     };
@@ -105,6 +113,12 @@ export async function incidentRoutes(server: FastifyInstance) {
             title: { type: "string" },
             description: { type: "string" },
             sourceUrl: { type: "string" },
+            sourceType: { type: "string" },
+            sourceExternalId: { type: "string" },
+            sourceRepository: { type: "string" },
+            sourceRepoAvatarUrl: { type: "string" },
+            sourceActor: { type: "string" },
+            sourceAttribution: { type: "object", additionalProperties: true },
             followUpActions: { type: "array", items: { type: "string" } },
             occurredAt: { type: "string" },
           },
@@ -117,6 +131,103 @@ export async function incidentRoutes(server: FastifyInstance) {
     async (request, reply) => {
       const incident = await incidentService.createIncident(request.body);
       return reply.status(201).send(incident);
+    }
+  );
+
+  // POST /api/v1/incidents/ingest — normalize and ingest an external incident payload
+  server.post<{ Body: RawIncidentPayload }>(
+    "/ingest",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "Ingest incident payload from external source",
+        body: {
+          type: "object",
+          properties: {
+            sourceType: { type: "string" },
+            externalId: { type: "string" },
+            bridgeId: { type: "string" },
+            assetCode: { type: "string" },
+            severity: { type: "string" },
+            title: { type: "string" },
+            description: { type: "string" },
+            sourceUrl: { type: "string" },
+            occurredAt: { type: "string" },
+            repository: { type: "string" },
+            repoAvatarUrl: { type: "string" },
+            actor: { type: "string" },
+            followUpActions: { type: "array", items: { type: "string" } },
+            metadata: { type: "object", additionalProperties: true },
+            source: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                type: { type: "string" },
+                externalId: { type: "string" },
+                repository: { type: "string" },
+                repoAvatarUrl: { type: "string" },
+                actor: { type: "string" },
+                url: { type: "string" },
+              },
+            },
+          },
+        },
+        response: {
+          200: { type: "object", additionalProperties: true },
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await incidentIngestionService.ingestWithRetry(request.body);
+      if (result.queuedForReview) {
+        return reply.status(202).send(result);
+      }
+      return result;
+    }
+  );
+
+  // POST /api/v1/incidents/webhook — webhook-friendly alias for external integrations
+  server.post<{ Body: RawIncidentPayload }>(
+    "/webhook",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "Webhook ingestion endpoint for bridge incidents",
+        body: { type: "object", additionalProperties: true },
+        response: { 200: { type: "object", additionalProperties: true } },
+      },
+    },
+    async (request, reply) => {
+      const result = await incidentIngestionService.ingestWithRetry(request.body);
+      if (result.queuedForReview) {
+        return reply.status(202).send(result);
+      }
+      return result;
+    }
+  );
+
+  // GET /api/v1/incidents/ingestion/review-queue — list pending manual review payloads
+  server.get<{ Querystring: { limit?: string } }>(
+    "/ingestion/review-queue",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "List pending incident ingestion review queue",
+        querystring: {
+          type: "object",
+          properties: {
+            limit: { type: "string" },
+          },
+        },
+        response: {
+          200: { type: "object", additionalProperties: true },
+        },
+      },
+    },
+    async (request, _reply) => {
+      const limit = request.query.limit ? Number(request.query.limit) : 50;
+      const items = await incidentIngestionService.listManualReviewQueue(limit);
+      return { items, total: items.length };
     }
   );
 
