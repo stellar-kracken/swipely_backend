@@ -1,9 +1,12 @@
+import type { Knex } from "knex";
 import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
 
+export type SearchEntityType = "asset" | "bridge" | "incident" | "alert";
+
 export interface SearchResult {
   id: string;
-  type: "asset" | "bridge" | "pool" | "documentation";
+  type: SearchEntityType;
   title: string;
   description: string;
   relevanceScore: number;
@@ -13,7 +16,7 @@ export interface SearchResult {
 
 export interface SearchQuery {
   query: string;
-  type?: "asset" | "bridge" | "pool" | "documentation";
+  type?: SearchEntityType;
   limit?: number;
   offset?: number;
   fuzzy?: boolean;
@@ -22,460 +25,781 @@ export interface SearchQuery {
 
 export interface SearchSuggestion {
   text: string;
-  type: string;
+  type: SearchEntityType;
   count: number;
 }
 
-export interface SearchAnalytics {
-  query: string;
-  userId?: string;
-  resultsCount: number;
-  timestamp: Date;
-  clickedResult?: string;
+interface SearchDocumentRecord {
+  document_key: string;
+  entity_type: SearchEntityType;
+  entity_id: string;
+  title: string;
+  subtitle: string | null;
+  body: string | null;
+  search_tokens: string | null;
+  metadata: Record<string, unknown> | string | null;
+  rank_weight: number;
+  visibility: string;
+  source_updated_at: string | Date;
+  indexed_at: string | Date;
 }
 
+interface SearchIndexDocumentInput {
+  documentKey: string;
+  entityType: SearchEntityType;
+  entityId: string;
+  title: string;
+  subtitle: string | null;
+  body: string | null;
+  searchTokens: string | null;
+  metadata: Record<string, unknown>;
+  rankWeight: number;
+  visibility: "public" | "private";
+  sourceUpdatedAt: Date;
+}
+
+interface BuiltDocuments {
+  documents: SearchIndexDocumentInput[];
+  deleteDocumentKeys: string[];
+}
+
+const INDEX_ENTITY_TYPES: SearchEntityType[] = [
+  "asset",
+  "bridge",
+  "incident",
+  "alert",
+];
+
+const SYNONYM_MAP: Record<string, string[]> = {
+  usdc: ["usd coin", "circle usdc", "usd stablecoin"],
+  eurc: ["euro coin", "euro stablecoin"],
+  xlm: ["stellar", "stellar lumens"],
+  bridge: ["cross chain", "cross-chain"],
+  alert: ["notification", "alarm"],
+  incident: ["outage", "event"],
+  rpc: ["json rpc", "node"],
+  horizon: ["stellar horizon", "api"],
+};
+
 export class SearchService {
-  private db = getDatabase();
+  private readonly db = getDatabase();
 
-  /**
-   * Perform full-text search across all entities
-   */
   async search(searchQuery: SearchQuery): Promise<{ results: SearchResult[]; total: number }> {
-    logger.info(searchQuery, "Performing search");
-
     const { query, type, limit = 20, offset = 0, fuzzy = true, filters = {} } = searchQuery;
-    
+
     if (!query || query.trim().length < 2) {
       return { results: [], total: 0 };
     }
 
-    // Track search analytics
-    await this.trackSearchAnalytics(query);
+    await this.syncIncrementalIndex(type ? [type] : INDEX_ENTITY_TYPES);
 
     const searchTerms = this.parseSearchQuery(query, fuzzy);
-    const results: SearchResult[] = [];
+    const candidateRows = await this.queryDocuments(searchTerms, type, filters, limit + offset);
+    const rankedResults = candidateRows
+      .map((row) => this.mapRowToResult(row, searchTerms))
+      .sort((left, right) => right.relevanceScore - left.relevanceScore);
 
-    // Search across different entity types
-    if (!type || type === "asset") {
-      const assetResults = await this.searchAssets(searchTerms, filters);
-      results.push(...assetResults);
-    }
-
-    if (!type || type === "bridge") {
-      const bridgeResults = await this.searchBridges(searchTerms, filters);
-      results.push(...bridgeResults);
-    }
-
-    if (!type || type === "pool") {
-      const poolResults = await this.searchPools(searchTerms, filters);
-      results.push(...poolResults);
-    }
-
-    if (!type || type === "documentation") {
-      const docResults = await this.searchDocumentation(searchTerms, filters);
-      results.push(...docResults);
-    }
-
-    // Sort by relevance score and paginate
-    const sortedResults = results
-      .sort((a, b) => b.relevanceScore - a.relevanceScore)
-      .slice(offset, offset + limit);
+    const results = rankedResults.slice(offset, offset + limit);
+    await this.trackSearchAnalytics(query, undefined, rankedResults.length, filters);
 
     return {
-      results: sortedResults,
-      total: results.length,
+      results,
+      total: rankedResults.length,
     };
   }
 
-  /**
-   * Get search suggestions/autocomplete
-   */
   async getSuggestions(query: string, limit = 10): Promise<SearchSuggestion[]> {
-    logger.info({ query, limit }, "Getting search suggestions");
-
     if (!query || query.trim().length < 2) {
       return [];
     }
 
+    await this.syncIncrementalIndex(INDEX_ENTITY_TYPES);
+    const searchTerms = this.parseSearchQuery(query, true);
+    const rows = await this.queryDocuments(searchTerms, undefined, {}, limit);
+
     const suggestions: SearchSuggestion[] = [];
-
-    // Asset symbol/name suggestions
-    const assetSuggestions = await this.db("assets")
-      .where("symbol", "ILIKE", `%${query}%`)
-      .orWhere("name", "ILIKE", `%${query}%`)
-      .select("symbol", "name")
-      .limit(limit / 2);
-
-    suggestions.push(
-      ...assetSuggestions.map(asset => ({
-        text: `${asset.symbol} - ${asset.name}`,
-        type: "asset",
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const key = `${row.entity_type}:${row.title}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      suggestions.push({
+        text: row.subtitle ? `${row.title} - ${row.subtitle}` : row.title,
+        type: row.entity_type,
         count: 1,
-      }))
-    );
-
-    // Bridge name suggestions
-    const bridgeSuggestions = await this.db("bridges")
-      .where("name", "ILIKE", `%${query}%`)
-      .select("name")
-      .limit(limit / 2);
-
-    suggestions.push(
-      ...bridgeSuggestions.map(bridge => ({
-        text: bridge.name,
-        type: "bridge",
-        count: 1,
-      }))
-    );
-
-    return suggestions.slice(0, limit);
-  }
-
-  /**
-   * Get recent searches for a user
-   */
-  async getRecentSearches(userId?: string, limit = 10): Promise<string[]> {
-    const query = this.db("search_analytics")
-      .select("query")
-      .orderBy("timestamp", "desc")
-      .limit(limit);
-
-    if (userId) {
-      query.where("user_id", userId);
-    } else {
-      query.whereNull("user_id");
+      });
+      if (suggestions.length >= limit) break;
     }
 
-    const results = await query.distinct("query");
-    return results.map(r => r.query);
+    return suggestions;
   }
 
-  /**
-   * Track search analytics
-   */
-  async trackSearchAnalytics(query: string, userId?: string): Promise<void> {
+  async getRecentSearches(userId?: string, limit = 10): Promise<string[]> {
+    let query = this.db("search_analytics")
+      .select("query", "time")
+      .orderBy("time", "desc")
+      .limit(limit * 5);
+
+    if (userId) {
+      query = query.where("user_id", userId);
+    } else {
+      query = query.whereNull("user_id");
+    }
+
+    const rows = await query;
+    const recent: string[] = [];
+    const seen = new Set<string>();
+
+    for (const row of rows) {
+      if (seen.has(row.query)) continue;
+      seen.add(row.query);
+      recent.push(row.query);
+      if (recent.length >= limit) break;
+    }
+
+    return recent;
+  }
+
+  async trackSearchAnalytics(
+    query: string,
+    userId?: string,
+    resultsCount = 0,
+    filters: Record<string, unknown> = {}
+  ): Promise<void> {
     await this.db("search_analytics").insert({
       query,
-      user_id: userId,
-      timestamp: new Date(),
+      user_id: userId ?? null,
+      results_count: resultsCount,
+      filters: JSON.stringify(filters),
+      time: new Date(),
     });
   }
 
-  /**
-   * Track result click
-   */
   async trackResultClick(query: string, resultId: string, userId?: string): Promise<void> {
+    let searchQuery = this.db("search_analytics")
+      .select("id")
+      .where({ query })
+      .orderBy("time", "desc")
+      .first();
+
+    if (userId) {
+      searchQuery = searchQuery.where("user_id", userId);
+    } else {
+      searchQuery = searchQuery.whereNull("user_id");
+    }
+
+    const row = await searchQuery;
+    if (!row?.id) {
+      return;
+    }
+
     await this.db("search_analytics")
-      .where("query", query)
-      .where("user_id", userId || null)
-      .orderBy("timestamp", "desc")
-      .limit(1)
+      .where({ id: row.id })
       .update({ clicked_result: resultId });
   }
 
-  /**
-   * Rebuild search index
-   */
-  async rebuildSearchIndex(): Promise<void> {
-    logger.info("Rebuilding search index");
+  async rebuildSearchIndex(entityTypes: SearchEntityType[] = INDEX_ENTITY_TYPES): Promise<void> {
+    logger.info({ entityTypes }, "Rebuilding search index");
 
-    // This would typically update a dedicated search index like Elasticsearch
-    // For now, we'll ensure database indexes are optimized
-    await this.db.raw("ANALYZE");
-    await this.db.raw("REINDEX DATABASE bridge_watch");
+    for (const entityType of entityTypes) {
+      await this.reindexEntityType(entityType);
+    }
   }
 
-  /**
-   * Search assets
-   */
-  private async searchAssets(
-    searchTerms: string[],
-    filters: Record<string, unknown>
-  ): Promise<SearchResult[]> {
-    let query = this.db("assets")
-      .select(
-        "id",
-        "symbol as title",
-        "name",
-        "bridge_provider",
-        "source_chain",
-        "is_active"
-      )
-      .where("is_active", true);
+  async getIndexStatus(): Promise<
+    Array<{
+      entityType: string;
+      lastIndexed: string | null;
+      totalRecords: number;
+      indexedRecords: number;
+      status: string;
+      errorMessage: string | null;
+    }>
+  > {
+    const metadataRows = await this.db("search_index_metadata")
+      .select("*")
+      .whereIn("entity_type", INDEX_ENTITY_TYPES)
+      .orderBy("entity_type", "asc");
 
-    // Apply search terms
-    searchTerms.forEach(term => {
-      query = query.andWhere(function() {
-        this.where("symbol", "ILIKE", `%${term}%`)
-            .orWhere("name", "ILIKE", `%${term}%`)
-            .orWhere("bridge_provider", "ILIKE", `%${term}%`);
-      });
-    });
-
-    // Apply filters
-    if (filters.bridge_provider) {
-      query = query.where("bridge_provider", filters.bridge_provider);
-    }
-
-    if (filters.source_chain) {
-      query = query.where("source_chain", filters.source_chain);
-    }
-
-    const assets = await query;
-
-    return assets.map(asset => ({
-      id: asset.id,
-      type: "asset" as const,
-      title: asset.title,
-      description: `${asset.name} - ${asset.bridge_provider || 'Native'} on ${asset.source_chain || 'Stellar'}`,
-      relevanceScore: this.calculateRelevanceScore(searchTerms, asset.title, asset.name),
-      highlights: this.generateHighlights(searchTerms, [asset.title, asset.name]),
-      metadata: {
-        symbol: asset.title,
-        bridgeProvider: asset.bridge_provider,
-        sourceChain: asset.source_chain,
-        isActive: asset.is_active,
-      },
+    return metadataRows.map((row) => ({
+      entityType: String(row.entity_type),
+      lastIndexed: row.last_indexed ? new Date(String(row.last_indexed)).toISOString() : null,
+      totalRecords: Number(row.total_records ?? 0),
+      indexedRecords: Number(row.indexed_records ?? 0),
+      status: String(row.status ?? "unknown"),
+      errorMessage: row.error_message ? String(row.error_message) : null,
     }));
   }
 
-  /**
-   * Search bridges
-   */
-  private async searchBridges(
-    searchTerms: string[],
-    filters: Record<string, unknown>
-  ): Promise<SearchResult[]> {
-    let query = this.db("bridges")
+  async getAnalytics(options: {
+    days?: number;
+    userId?: string;
+    limit?: number;
+  }): Promise<Array<Record<string, unknown>>> {
+    const { days, userId, limit } = options;
+    let query = this.db("search_analytics")
       .select(
-        "id",
-        "name as title",
-        "source_chain",
-        "status",
-        "total_value_locked",
-        "is_active"
+        "query",
+        this.db.raw("COUNT(*) as search_count"),
+        this.db.raw("AVG(COALESCE(results_count, 0)) as avg_results"),
+        this.db.raw("MAX(time) as last_searched")
       )
-      .where("is_active", true);
+      .groupBy("query")
+      .orderBy("search_count", "desc");
 
-    // Apply search terms
-    searchTerms.forEach(term => {
-      query = query.andWhere(function() {
-        this.where("name", "ILIKE", `%${term}%`)
-            .orWhere("source_chain", "ILIKE", `%${term}%`);
-      });
+    if (days) {
+      const daysAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      query = query.where("time", ">", daysAgo);
+    }
+
+    if (userId) {
+      query = query.where("user_id", userId);
+    }
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    return query;
+  }
+
+  private async syncIncrementalIndex(entityTypes: SearchEntityType[]): Promise<void> {
+    const metadataRows = await this.db("search_index_metadata")
+      .select("*")
+      .whereIn("entity_type", entityTypes);
+    const metadataByType = new Map<string, Record<string, unknown>>();
+    for (const row of metadataRows) {
+      metadataByType.set(String(row.entity_type), row as Record<string, unknown>);
+    }
+
+    for (const entityType of entityTypes) {
+      const metadata = metadataByType.get(entityType);
+      const lastIndexed = metadata?.last_indexed ? new Date(String(metadata.last_indexed)) : null;
+      const shouldReindex =
+        !lastIndexed ||
+        String(metadata?.status ?? "pending") !== "ready" ||
+        Date.now() - lastIndexed.getTime() > 60_000;
+
+      if (!shouldReindex) {
+        continue;
+      }
+
+      if (!lastIndexed || String(metadata?.status ?? "pending") !== "ready") {
+        await this.reindexEntityType(entityType);
+      } else {
+        await this.indexEntityType(entityType, lastIndexed);
+      }
+    }
+  }
+
+  private async reindexEntityType(entityType: SearchEntityType): Promise<void> {
+    await this.updateIndexMetadata(entityType, {
+      status: "running",
+      errorMessage: null,
     });
 
-    // Apply filters
-    if (filters.source_chain) {
-      query = query.where("source_chain", filters.source_chain);
+    try {
+      const built = await this.buildDocuments(entityType);
+
+      await this.db.transaction(async (trx) => {
+        await trx("search_documents").where({ entity_type: entityType }).delete();
+        await this.insertDocuments(trx, built.documents);
+      });
+
+      const indexedCount = await this.countIndexedDocuments(entityType);
+      await this.updateIndexMetadata(entityType, {
+        lastIndexed: new Date(),
+        totalRecords: indexedCount,
+        indexedRecords: indexedCount,
+        status: "ready",
+        errorMessage: null,
+      });
+    } catch (error) {
+      logger.error({ entityType, error }, "Failed to rebuild search index entity");
+      await this.updateIndexMetadata(entityType, {
+        status: "error",
+        errorMessage: error instanceof Error ? error.message : "Unknown search indexing error",
+      });
+      throw error;
+    }
+  }
+
+  private async indexEntityType(entityType: SearchEntityType, since: Date): Promise<void> {
+    await this.updateIndexMetadata(entityType, {
+      status: "running",
+      errorMessage: null,
+    });
+
+    try {
+      const built = await this.buildDocuments(entityType, since);
+
+      await this.db.transaction(async (trx) => {
+        await this.insertDocuments(trx, built.documents);
+        if (built.deleteDocumentKeys.length > 0) {
+          await trx("search_documents")
+            .whereIn("document_key", built.deleteDocumentKeys)
+            .delete();
+        }
+      });
+
+      const indexedCount = await this.countIndexedDocuments(entityType);
+      await this.updateIndexMetadata(entityType, {
+        lastIndexed: new Date(),
+        totalRecords: indexedCount,
+        indexedRecords: indexedCount,
+        status: "ready",
+        errorMessage: null,
+      });
+    } catch (error) {
+      logger.error({ entityType, error }, "Failed to incrementally index entity");
+      await this.updateIndexMetadata(entityType, {
+        status: "error",
+        errorMessage: error instanceof Error ? error.message : "Unknown search indexing error",
+      });
+    }
+  }
+
+  private async buildDocuments(
+    entityType: SearchEntityType,
+    since?: Date
+  ): Promise<BuiltDocuments> {
+    switch (entityType) {
+      case "asset":
+        return this.buildAssetDocuments(since);
+      case "bridge":
+        return this.buildBridgeDocuments(since);
+      case "incident":
+        return this.buildIncidentDocuments(since);
+      case "alert":
+        return this.buildAlertDocuments(since);
+    }
+  }
+
+  private async buildAssetDocuments(since?: Date): Promise<BuiltDocuments> {
+    let query = this.db("assets").select("*");
+    if (since) {
+      query = query.where("updated_at", ">", since);
+    }
+
+    const rows = await query;
+    const deleteDocumentKeys = rows
+      .filter((row) => !row.is_active)
+      .map((row) => `asset:${row.id}`);
+
+    const documents = rows
+      .filter((row) => row.is_active)
+      .map<SearchIndexDocumentInput>((row) => ({
+        documentKey: `asset:${row.id}`,
+        entityType: "asset",
+        entityId: String(row.id),
+        title: String(row.symbol),
+        subtitle: [row.name, row.bridge_provider, row.source_chain].filter(Boolean).join(" · "),
+        body: [row.name, row.asset_type, row.bridge_provider, row.source_chain].filter(Boolean).join(" "),
+        searchTokens: this.buildSearchTokens(
+          String(row.symbol),
+          row.name ? String(row.name) : "",
+          row.bridge_provider ? String(row.bridge_provider) : "",
+          row.source_chain ? String(row.source_chain) : ""
+        ),
+        metadata: {
+          symbol: row.symbol,
+          name: row.name,
+          bridgeProvider: row.bridge_provider,
+          sourceChain: row.source_chain,
+          href: `/assets/${row.symbol}`,
+        },
+        rankWeight: 120,
+        visibility: "public",
+        sourceUpdatedAt: new Date(row.updated_at ?? row.created_at ?? Date.now()),
+      }));
+
+    return { documents, deleteDocumentKeys };
+  }
+
+  private async buildBridgeDocuments(since?: Date): Promise<BuiltDocuments> {
+    let query = this.db("bridges").select("*");
+    if (since) {
+      query = query.where("updated_at", ">", since);
+    }
+
+    const rows = await query;
+    const deleteDocumentKeys = rows
+      .filter((row) => !row.is_active)
+      .map((row) => `bridge:${row.id}`);
+
+    const documents = rows
+      .filter((row) => row.is_active)
+      .map<SearchIndexDocumentInput>((row) => ({
+        documentKey: `bridge:${row.id}`,
+        entityType: "bridge",
+        entityId: String(row.id),
+        title: String(row.name),
+        subtitle: `${row.source_chain} · ${row.status}`,
+        body: [
+          row.name,
+          row.source_chain,
+          `status ${row.status}`,
+          `tvl ${row.total_value_locked ?? 0}`,
+        ].join(" "),
+        searchTokens: this.buildSearchTokens(
+          String(row.name),
+          row.source_chain ? String(row.source_chain) : "",
+          row.status ? String(row.status) : ""
+        ),
+        metadata: {
+          sourceChain: row.source_chain,
+          status: row.status,
+          totalValueLocked: Number(row.total_value_locked ?? 0),
+          href: "/bridges",
+        },
+        rankWeight: 110,
+        visibility: "public",
+        sourceUpdatedAt: new Date(row.updated_at ?? row.created_at ?? Date.now()),
+      }));
+
+    return { documents, deleteDocumentKeys };
+  }
+
+  private async buildIncidentDocuments(since?: Date): Promise<BuiltDocuments> {
+    let query = this.db("bridge_incidents").select("*");
+    if (since) {
+      query = query.where("updated_at", ">", since);
+    }
+
+    const rows = await query.orderBy("occurred_at", "desc");
+    const documents = rows.map<SearchIndexDocumentInput>((row) => ({
+      documentKey: `incident:${row.id}`,
+      entityType: "incident",
+      entityId: String(row.id),
+      title: String(row.title),
+      subtitle: [row.bridge_id, row.asset_code, row.severity, row.status]
+        .filter(Boolean)
+        .join(" · "),
+      body: [
+        row.description,
+        row.source_type,
+        row.source_repository,
+        Array.isArray(row.follow_up_actions)
+          ? row.follow_up_actions.join(" ")
+          : String(row.follow_up_actions ?? ""),
+      ]
+        .filter(Boolean)
+        .join(" "),
+      searchTokens: this.buildSearchTokens(
+        String(row.title),
+        String(row.description),
+        row.bridge_id ? String(row.bridge_id) : "",
+        row.asset_code ? String(row.asset_code) : "",
+        row.severity ? String(row.severity) : "",
+        row.status ? String(row.status) : ""
+      ),
+      metadata: {
+        bridgeId: row.bridge_id,
+        assetCode: row.asset_code,
+        severity: row.severity,
+        status: row.status,
+        href: "/incidents",
+      },
+      rankWeight: this.priorityWeight(row.severity, {
+        critical: 180,
+        high: 160,
+        medium: 140,
+        low: 120,
+      }),
+      visibility: "public",
+      sourceUpdatedAt: new Date(row.updated_at ?? row.created_at ?? row.occurred_at ?? Date.now()),
+    }));
+
+    return { documents, deleteDocumentKeys: [] };
+  }
+
+  private async buildAlertDocuments(since?: Date): Promise<BuiltDocuments> {
+    let query = this.db("alert_events").select("*");
+    if (since) {
+      query = query.where("time", ">", since);
+    }
+
+    const rows = await query.orderBy("time", "desc");
+    const documents = rows.map<SearchIndexDocumentInput>((row) => ({
+      documentKey: `alert:${row.rule_id}:${row.time}:${row.alert_type}`,
+      entityType: "alert",
+      entityId: `${row.rule_id}:${row.time}`,
+      title: `${this.humanize(row.priority)} ${this.humanize(row.alert_type)} alert for ${row.asset_code}`,
+      subtitle: [row.metric, row.priority, row.asset_code].filter(Boolean).join(" · "),
+      body: [
+        `Triggered value ${row.triggered_value}`,
+        `Threshold ${row.threshold}`,
+        row.metric,
+        row.alert_type,
+        row.asset_code,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      searchTokens: this.buildSearchTokens(
+        row.alert_type ? String(row.alert_type) : "",
+        row.asset_code ? String(row.asset_code) : "",
+        row.metric ? String(row.metric) : "",
+        row.priority ? String(row.priority) : ""
+      ),
+      metadata: {
+        assetCode: row.asset_code,
+        alertType: row.alert_type,
+        priority: row.priority,
+        metric: row.metric,
+        href: "/settings",
+      },
+      rankWeight: this.priorityWeight(row.priority, {
+        critical: 190,
+        high: 170,
+        medium: 145,
+        low: 125,
+      }),
+      visibility: "public",
+      sourceUpdatedAt: new Date(row.time ?? Date.now()),
+    }));
+
+    return { documents, deleteDocumentKeys: [] };
+  }
+
+  private async insertDocuments(
+    trx: Knex | Knex.Transaction,
+    documents: SearchIndexDocumentInput[]
+  ): Promise<void> {
+    if (documents.length === 0) {
+      return;
+    }
+
+    const payload = documents.map((document) => ({
+      document_key: document.documentKey,
+      entity_type: document.entityType,
+      entity_id: document.entityId,
+      title: document.title,
+      subtitle: document.subtitle,
+      body: document.body,
+      search_tokens: document.searchTokens,
+      metadata: JSON.stringify(document.metadata),
+      rank_weight: document.rankWeight,
+      visibility: document.visibility,
+      source_updated_at: document.sourceUpdatedAt,
+      indexed_at: new Date(),
+    }));
+
+    await trx("search_documents")
+      .insert(payload)
+      .onConflict("document_key")
+      .merge([
+        "entity_type",
+        "entity_id",
+        "title",
+        "subtitle",
+        "body",
+        "search_tokens",
+        "metadata",
+        "rank_weight",
+        "visibility",
+        "source_updated_at",
+        "indexed_at",
+      ]);
+  }
+
+  private async queryDocuments(
+    searchTerms: string[],
+    type?: SearchEntityType,
+    filters: Record<string, unknown> = {},
+    requestedLimit = 20
+  ): Promise<SearchDocumentRecord[]> {
+    const scanLimit = Math.min(Math.max(requestedLimit * 6, 30), 250);
+
+    let query = this.db("search_documents")
+      .select("*")
+      .where({ visibility: "public" });
+
+    if (type) {
+      query = query.andWhere("entity_type", type);
     }
 
     if (filters.status) {
-      query = query.where("status", filters.status);
+      query = query.andWhereRaw("metadata::text ILIKE ?", [`%\"status\":\"${String(filters.status)}\"%`]);
+    }
+    if (filters.severity) {
+      query = query.andWhereRaw("metadata::text ILIKE ?", [`%\"severity\":\"${String(filters.severity)}\"%`]);
+    }
+    if (filters.priority) {
+      query = query.andWhereRaw("metadata::text ILIKE ?", [`%\"priority\":\"${String(filters.priority)}\"%`]);
     }
 
-    const bridges = await query;
-
-    return bridges.map(bridge => ({
-      id: bridge.id,
-      type: "bridge" as const,
-      title: bridge.title,
-      description: `${bridge.source_chain} bridge - Status: ${bridge.status}, TVL: $${Number(bridge.total_value_locked).toLocaleString()}`,
-      relevanceScore: this.calculateRelevanceScore(searchTerms, bridge.title, bridge.source_chain),
-      highlights: this.generateHighlights(searchTerms, [bridge.title, bridge.source_chain]),
-      metadata: {
-        sourceChain: bridge.source_chain,
-        status: bridge.status,
-        totalValueLocked: Number(bridge.total_value_locked),
-        isActive: bridge.is_active,
-      },
-    }));
-  }
-
-  /**
-   * Search liquidity pools
-   */
-  private async searchPools(
-    searchTerms: string[],
-    filters: Record<string, unknown>
-  ): Promise<SearchResult[]> {
-    let query = this.db("liquidity_pools")
-      .select(
-        "id",
-        "dex",
-        "asset_a",
-        "asset_b",
-        "total_liquidity",
-        "health_score"
-      );
-
-    // Apply search terms
-    searchTerms.forEach(term => {
-      query = query.andWhere(function() {
-        this.where("asset_a", "ILIKE", `%${term}%`)
-            .orWhere("asset_b", "ILIKE", `%${term}%`)
-            .orWhere("dex", "ILIKE", `%${term}%`);
-      });
-    });
-
-    // Apply filters
-    if (filters.dex) {
-      query = query.where("dex", filters.dex);
-    }
-
-    if (filters.min_liquidity) {
-      query = query.where("total_liquidity", ">=", filters.min_liquidity);
-    }
-
-    if (filters.min_health_score) {
-      query = query.where("health_score", ">=", filters.min_health_score);
-    }
-
-    const pools = await query;
-
-    return pools.map(pool => ({
-      id: pool.id,
-      type: "pool" as const,
-      title: `${pool.asset_a}/${pool.asset_b} on ${pool.dex}`,
-      description: `Liquidity: $${Number(pool.total_liquidity).toLocaleString()}, Health: ${pool.health_score}/100`,
-      relevanceScore: this.calculateRelevanceScore(searchTerms, pool.asset_a, pool.asset_b, pool.dex),
-      highlights: this.generateHighlights(searchTerms, [pool.asset_a, pool.asset_b, pool.dex]),
-      metadata: {
-        assetA: pool.asset_a,
-        assetB: pool.asset_b,
-        dex: pool.dex,
-        totalLiquidity: Number(pool.total_liquidity),
-        healthScore: pool.health_score,
-      },
-    }));
-  }
-
-  /**
-   * Search documentation (mock implementation)
-   */
-  private async searchDocumentation(
-    searchTerms: string[],
-    filters: Record<string, unknown>
-  ): Promise<SearchResult[]> {
-    // This would typically integrate with a documentation system
-    // For now, return mock documentation results
-    const mockDocs = [
-      {
-        id: "doc-1",
-        title: "Getting Started with Bridge Watch",
-        content: "Learn how to monitor cross-chain bridges on Stellar",
-        category: "tutorial",
-      },
-      {
-        id: "doc-2", 
-        title: "API Reference",
-        content: "Complete API documentation for Bridge Watch endpoints",
-        category: "reference",
-      },
-      {
-        id: "doc-3",
-        title: "Liquidity Pool Monitoring",
-        content: "Understanding liquidity pool metrics and health scoring",
-        category: "guide",
-      },
-    ];
-
-    return mockDocs
-      .filter(doc => 
-        searchTerms.some(term =>
-          doc.title.toLowerCase().includes(term.toLowerCase()) ||
-          doc.content.toLowerCase().includes(term.toLowerCase())
-        )
-      )
-      .map(doc => ({
-        id: doc.id,
-        type: "documentation" as const,
-        title: doc.title,
-        description: doc.content,
-        relevanceScore: this.calculateRelevanceScore(searchTerms, doc.title, doc.content),
-        highlights: this.generateHighlights(searchTerms, [doc.title, doc.content]),
-        metadata: {
-          category: doc.category,
-        },
-      }));
-  }
-
-  /**
-   * Parse search query into terms with fuzzy matching
-   */
-  private parseSearchQuery(query: string, fuzzy: boolean): string[] {
-    const terms = query.trim().split(/\s+/);
-    
-    if (!fuzzy) {
-      return terms;
-    }
-
-    // Add fuzzy variations for each term
-    const fuzzyTerms: string[] = [];
-    terms.forEach(term => {
-      fuzzyTerms.push(term);
-      
-      // Add common variations
-      if (term.length > 3) {
-        fuzzyTerms.push(term.slice(0, -1)); // Remove last character
-        fuzzyTerms.push(term.slice(1)); // Remove first character
-      }
-      
-      // Add plural/singular variations
-      if (term.endsWith('s')) {
-        fuzzyTerms.push(term.slice(0, -1));
-      } else {
-        fuzzyTerms.push(term + 's');
+    query = query.andWhere(function searchMatcher() {
+      for (const term of searchTerms) {
+        const pattern = `%${term}%`;
+        this.orWhere("title", "ILIKE", pattern);
+        this.orWhere("subtitle", "ILIKE", pattern);
+        this.orWhere("body", "ILIKE", pattern);
+        this.orWhere("search_tokens", "ILIKE", pattern);
+        this.orWhereRaw(
+          "to_tsvector('simple', COALESCE(title, '') || ' ' || COALESCE(subtitle, '') || ' ' || COALESCE(body, '') || ' ' || COALESCE(search_tokens, '')) @@ plainto_tsquery('simple', ?)",
+          [term]
+        );
       }
     });
 
-    return [...new Set(fuzzyTerms)];
+    return query.limit(scanLimit);
   }
 
-  /**
-   * Calculate relevance score for search results
-   */
-  private calculateRelevanceScore(searchTerms: string[], ...fields: string[]): number {
-    let score = 0;
-    const allText = fields.join(' ').toLowerCase();
-    
-    searchTerms.forEach(term => {
-      const lowerTerm = term.toLowerCase();
-      
-      // Exact match gets highest score
-      fields.forEach(field => {
-        if (field.toLowerCase() === lowerTerm) {
-          score += 100;
-        } else if (field.toLowerCase().includes(lowerTerm)) {
-          score += 50;
-        }
-      });
-      
-      // Partial matches get lower score
-      if (allText.includes(lowerTerm)) {
-        score += 10;
-      }
-    });
+  private mapRowToResult(row: SearchDocumentRecord, searchTerms: string[]): SearchResult {
+    const metadata =
+      typeof row.metadata === "string"
+        ? (JSON.parse(row.metadata) as Record<string, unknown>)
+        : ((row.metadata as Record<string, unknown>) ?? {});
+
+    return {
+      id: row.entity_id,
+      type: row.entity_type,
+      title: row.title,
+      description: row.subtitle ?? row.body ?? "",
+      relevanceScore: this.calculateRelevanceScore(row, searchTerms),
+      highlights: this.generateHighlights(row, searchTerms),
+      metadata,
+    };
+  }
+
+  private calculateRelevanceScore(
+    row: SearchDocumentRecord,
+    searchTerms: string[]
+  ): number {
+    const title = row.title.toLowerCase();
+    const subtitle = (row.subtitle ?? "").toLowerCase();
+    const body = (row.body ?? "").toLowerCase();
+    const tokens = (row.search_tokens ?? "").toLowerCase();
+
+    let score = Number(row.rank_weight ?? 100);
+    for (const term of searchTerms) {
+      const normalized = term.toLowerCase();
+      if (title === normalized) score += 220;
+      else if (title.startsWith(normalized)) score += 140;
+      else if (title.includes(normalized)) score += 95;
+
+      if (subtitle.includes(normalized)) score += 45;
+      if (body.includes(normalized)) score += 20;
+      if (tokens.includes(normalized)) score += 30;
+    }
+
+    if (row.entity_type === "incident" || row.entity_type === "alert") {
+      const updatedAt = new Date(row.source_updated_at);
+      const ageHours = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60);
+      if (ageHours <= 24) score += 30;
+      else if (ageHours <= 168) score += 10;
+    }
 
     return score;
   }
 
-  /**
-   * Generate search highlights
-   */
-  private generateHighlights(searchTerms: string[], texts: string[]): string[] {
+  private generateHighlights(row: SearchDocumentRecord, searchTerms: string[]): string[] {
+    const combined = [row.title, row.subtitle ?? "", row.body ?? "", row.search_tokens ?? ""]
+      .join(" ")
+      .toLowerCase();
     const highlights: string[] = [];
-    
-    texts.forEach(text => {
-      searchTerms.forEach(term => {
-        const regex = new RegExp(`(${term})`, 'gi');
-        const matches = text.match(regex);
-        if (matches) {
-          highlights.push(...matches.slice(0, 3)); // Limit to 3 highlights per text
-        }
-      });
-    });
 
-    return [...new Set(highlights)];
+    for (const term of searchTerms) {
+      if (combined.includes(term.toLowerCase())) {
+        highlights.push(term);
+      }
+    }
+
+    return Array.from(new Set(highlights)).slice(0, 6);
+  }
+
+  private parseSearchQuery(query: string, fuzzy: boolean): string[] {
+    const baseTerms = query
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((term) => term.length >= 2);
+    const expanded = new Set<string>();
+
+    for (const term of baseTerms) {
+      expanded.add(term);
+      for (const synonym of SYNONYM_MAP[term] ?? []) {
+        expanded.add(synonym.toLowerCase());
+      }
+
+      if (fuzzy && term.length > 3) {
+        expanded.add(term.slice(0, -1));
+        expanded.add(term.slice(1));
+      }
+    }
+
+    return Array.from(expanded);
+  }
+
+  private buildSearchTokens(...parts: string[]): string {
+    const tokens = new Set<string>();
+    for (const part of parts) {
+      const normalizedPart = part.trim().toLowerCase();
+      if (!normalizedPart) continue;
+      tokens.add(normalizedPart);
+      for (const token of normalizedPart.split(/\s+/)) {
+        tokens.add(token);
+        for (const synonym of SYNONYM_MAP[token] ?? []) {
+          tokens.add(synonym.toLowerCase());
+        }
+      }
+    }
+
+    return Array.from(tokens).join(" ");
+  }
+
+  private priorityWeight(
+    value: unknown,
+    weights: Record<string, number>
+  ): number {
+    return weights[String(value ?? "").toLowerCase()] ?? 100;
+  }
+
+  private humanize(value: unknown): string {
+    return String(value ?? "")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  private async updateIndexMetadata(
+    entityType: SearchEntityType,
+    input: {
+      lastIndexed?: Date;
+      totalRecords?: number;
+      indexedRecords?: number;
+      status?: string;
+      errorMessage?: string | null;
+    }
+  ): Promise<void> {
+    const patch: Record<string, unknown> = {};
+    if (input.lastIndexed) patch.last_indexed = input.lastIndexed;
+    if (input.totalRecords !== undefined) patch.total_records = input.totalRecords;
+    if (input.indexedRecords !== undefined) patch.indexed_records = input.indexedRecords;
+    if (input.status !== undefined) patch.status = input.status;
+    if (input.errorMessage !== undefined) patch.error_message = input.errorMessage;
+
+    const updated = await this.db("search_index_metadata")
+      .where({ entity_type: entityType })
+      .update(patch);
+
+    if (updated === 0) {
+      await this.db("search_index_metadata").insert({
+        entity_type: entityType,
+        last_indexed: input.lastIndexed ?? new Date(0),
+        total_records: input.totalRecords ?? 0,
+        indexed_records: input.indexedRecords ?? 0,
+        status: input.status ?? "pending",
+        error_message: input.errorMessage ?? null,
+        index_config: JSON.stringify({ entityType }),
+      });
+    }
+  }
+
+  private async countIndexedDocuments(entityType: SearchEntityType): Promise<number> {
+    const [{ count }] = await this.db("search_documents")
+      .where({ entity_type: entityType })
+      .count<{ count: string }[]>("document_key as count");
+
+    return Number(count);
   }
 }
