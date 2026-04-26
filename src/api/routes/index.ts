@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { assetsRoutes } from "./assets.js";
 import { bridgesRoutes } from "./bridges.js";
 import { websocketRoutes } from "./websocket.js";
-import { alertsRoutes } from "./alerts.js";
+import { alertsRoutes } from "./alerts.routes.js";
 import { exportsRoutes } from "./exports.js";
 import { circuitBreakerRoutes } from "./circuitBreaker.js";
 import { preferencesRoutes } from "./preferences.js";
@@ -28,6 +28,16 @@ import { poolRoutes } from "./pools.routes.js";
 import { searchRoutes } from "./search.routes.js";
 import { cleanupRoutes } from "./cleanup.routes.js";
 import { discordRoutes } from "./discord.routes.js";
+import { alertRulesRoutes } from "./alertRules.js";
+import { auditRoutes } from "./audit.js";
+import { bridgeRegistryRoutes } from "./bridge-registry.routes.js";
+import { incidentRoutes } from "./incidents.routes.js";
+import { healthScoreHistoryRoutes } from "./healthScoreHistory.routes.js";
+import { horizonStreamRoutes } from "./horizonStream.routes.js";
+import { adminRotationRoutes } from "./adminRotation.js";
+import { digestSchedulerRoutes } from "./digestScheduler.js";
+import { alertSuppressionRoutes } from "./alertSuppression.js";
+import { externalDependenciesRoutes } from "./externalDependencies.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -61,4 +71,14 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(searchRoutes, { prefix: "/api/v1/search" });
   server.register(cleanupRoutes, { prefix: "/api/v1/cleanup" });
   server.register(discordRoutes, { prefix: "/api/v1/discord" });
+  server.register(alertRulesRoutes, { prefix: "/api/v1/alert-rules" });
+  server.register(auditRoutes, { prefix: "/api/v1/admin/audit" });
+  server.register(bridgeRegistryRoutes, { prefix: "/api/v1/bridge-registry" });
+  server.register(incidentRoutes, { prefix: "/api/v1/incidents" });
+  server.register(healthScoreHistoryRoutes, { prefix: "/api/v1/health-score-history" });
+  server.register(horizonStreamRoutes, { prefix: "/api/v1/horizon-streams" });
+  server.register(adminRotationRoutes, { prefix: "/api/v1/admin/rotation" });
+  server.register(digestSchedulerRoutes, { prefix: "/api/v1/digest" });
+  server.register(alertSuppressionRoutes, { prefix: "/api/v1/alert-suppression" });
+  server.register(externalDependenciesRoutes, { prefix: "/api/v1/external-dependencies" });
 }

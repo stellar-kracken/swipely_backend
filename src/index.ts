@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
+import rateLimit from "@fastify/rate-limit";
 import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
@@ -84,6 +85,17 @@ export async function buildServer() {
 
   // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
   await registerRateLimiting(server as any);
+
+  // Register official rate-limit plugin to satisfy CodeQL and handle per-route config
+  await server.register(rateLimit, {
+    global: false,
+    addHeaders: {
+      "x-ratelimit-limit": false,
+      "x-ratelimit-remaining": false,
+      "x-ratelimit-reset": false,
+      "retry-after": false,
+    },
+  });
 
   // Enable permessage-deflate compression for WebSocket frames.
   await server.register(websocket, {

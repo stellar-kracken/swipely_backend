@@ -4,10 +4,13 @@ import { processPriceCollection } from "./priceCollection.job.js";
 import { processHealthCalculation } from "./healthCalculation.job.js";
 import { processBridgeVerification } from "./bridgeVerification.job.js";
 import { processAnalyticsAggregation } from "./analyticsAggregation.worker.js";
-import { processPriceCacheWarmup } from "./priceCacheWarmup.worker.js";
+import { processMetricsRollup } from "./metricsRollup.worker.js";
+import { processDigestScheduler } from "./digestScheduler.worker.js";
+import { processMetadataSync } from "./metadataSync.job.js";
+import { processExternalDependencyMonitor } from "./externalDependencyMonitor.job.js";
 import { logger } from "../utils/logger.js";
 import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
-import { runPriceCacheWarmup } from "../jobs/priceCacheWarmup.job.js";
+import { runAuditRetentionJob } from "../jobs/auditRetention.job.js";
 
 export async function initJobSystem() {
   const jobQueue = JobQueue.getInstance();
@@ -35,8 +38,23 @@ export async function initJobSystem() {
       case "analytics-aggregation":
         await processAnalyticsAggregation(job);
         break;
-      case "price-cache-warmup":
-        await processPriceCacheWarmup(job);
+      case "metrics-rollup":
+        await processMetricsRollup(job);
+        break;
+      case "audit-retention":
+        await runAuditRetentionJob(job.data.retentionDays);
+        break;
+      case "digest-scheduler-daily":
+        await processDigestScheduler(job);
+        break;
+      case "digest-scheduler-weekly":
+        await processDigestScheduler(job);
+        break;
+      case "metadata-sync":
+        await processMetadataSync(job);
+        break;
+      case "external-dependency-monitor":
+        await processExternalDependencyMonitor(job);
         break;
       default:
         logger.warn({ jobName: job.name }, "Unknown job name in worker");
@@ -88,8 +106,24 @@ export async function initJobSystem() {
     params: { performerType: "bridges", metric: "tvl", limit: 10 }
   }, "*/5 * * * *");
 
-  // Price cache warmup: every 5 minutes
-  await jobQueue.addRepeatableJob("price-cache-warmup", {}, "*/5 * * * *");
+  // Metrics rollup: every 15 minutes to keep daily stats fresh
+  await jobQueue.addRepeatableJob("metrics-rollup", { type: "bridge-volume" }, "*/15 * * * *");
+
+  // Audit log retention: daily at 02:00 UTC, keep 90 days of info-level entries
+  await jobQueue.addRepeatableJob("audit-retention", { retentionDays: 90 }, "0 2 * * *");
+
+  // Digest scheduler jobs
+  // Daily digest: every hour (service will check user preferences and timezone)
+  await jobQueue.addRepeatableJob("digest-scheduler-daily", { digestType: "daily" }, "0 * * * *");
+  
+  // Weekly digest: every hour on Monday (service will check user preferences)
+  await jobQueue.addRepeatableJob("digest-scheduler-weekly", { digestType: "weekly" }, "0 * * * 1");
+
+  // Metadata sync: every 4 hours
+  await jobQueue.addRepeatableJob("metadata-sync", {}, "0 */4 * * *");
+
+  // External dependency checks: every 2 minutes
+  await jobQueue.addRepeatableJob("external-dependency-monitor", {}, "*/2 * * * *");
 
   logger.info("Scheduled job system initialized");
 }
