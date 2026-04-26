@@ -4,11 +4,21 @@ import { processPriceCollection } from "./priceCollection.job.js";
 import { processHealthCalculation } from "./healthCalculation.job.js";
 import { processBridgeVerification } from "./bridgeVerification.job.js";
 import { processAnalyticsAggregation } from "./analyticsAggregation.worker.js";
+import { processPriceCacheWarmup } from "./priceCacheWarmup.worker.js";
 import { logger } from "../utils/logger.js";
 import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
+import { runPriceCacheWarmup } from "../jobs/priceCacheWarmup.job.js";
 
 export async function initJobSystem() {
   const jobQueue = JobQueue.getInstance();
+
+  // Run price cache warmup on startup
+  try {
+    logger.info("Running startup price cache warmup");
+    await runPriceCacheWarmup();
+  } catch (error) {
+    logger.error({ error }, "Startup price cache warmup failed, continuing with job initialization");
+  }
 
   // Initialize worker with processor
   jobQueue.initWorker(async (job: Job) => {
@@ -24,6 +34,9 @@ export async function initJobSystem() {
         break;
       case "analytics-aggregation":
         await processAnalyticsAggregation(job);
+        break;
+      case "price-cache-warmup":
+        await processPriceCacheWarmup(job);
         break;
       default:
         logger.warn({ jobName: job.name }, "Unknown job name in worker");
@@ -74,6 +87,9 @@ export async function initJobSystem() {
     type: "top-performers",
     params: { performerType: "bridges", metric: "tvl", limit: 10 }
   }, "*/5 * * * *");
+
+  // Price cache warmup: every 5 minutes
+  await jobQueue.addRepeatableJob("price-cache-warmup", {}, "*/5 * * * *");
 
   logger.info("Scheduled job system initialized");
 }
