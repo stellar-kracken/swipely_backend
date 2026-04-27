@@ -13,6 +13,45 @@ export type PauseStatus = "active" | "recovering" | "resolved";
 export type TriggerStatus = "triggered" | "resolved" | "expired";
 export type RecoveryStatus = "pending" | "approved" | "executed" | "rejected";
 export type CommitmentStatus = "pending" | "verified" | "challenged" | "slashed" | "resolved";
+export type BridgeTransactionType = "mint" | "burn" | "transfer";
+export type BridgeTransactionStatus = "pending" | "confirmed" | "failed" | "cancelled" | "processing";
+
+export interface BridgeTransaction {
+  id: string;
+  bridge_name: string;
+  symbol: string;
+  transaction_type: BridgeTransactionType;
+  status: BridgeTransactionStatus;
+  correlation_id: string | null;
+  tx_hash: string;
+  source_chain: string | null;
+  source_address: string | null;
+  destination_address: string | null;
+  amount: string;
+  fee: string;
+  submitted_at: Date;
+  confirmed_at: Date | null;
+  failed_at: Date | null;
+  error_message: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export type NewBridgeTransaction = Omit<BridgeTransaction, "id" | "created_at" | "updated_at" | "confirmed_at" | "failed_at" | "error_message"> & {
+  confirmed_at?: Date | null;
+  failed_at?: Date | null;
+  error_message?: string | null;
+};
+
+export interface BridgeTransactionSummary {
+  bridgeName: string;
+  totalTransactions: number;
+  totalVolume: string;
+  averageConfirmationTimeSeconds: number;
+  pendingTransactions: number;
+  confirmedTransactions: number;
+  failedTransactions: number;
+}
 
 // ─── assets ──────────────────────────────────────────────────────────────────
 
@@ -277,4 +316,77 @@ export interface PreferenceMigrationHistory {
   migration_name: string;
   metadata: unknown;
   created_at: Date;
+}
+
+// ─── asset_transactions ─────────────────────────────────────────────────────
+
+export interface AssetTransaction {
+  id: string;
+  bridge_name: string | null;
+  asset_code: string;
+  asset_issuer: string;
+  transaction_hash: string;
+  operation_id: string;
+  operation_type: string;
+  status: "pending" | "completed" | "failed";
+  ledger: string | null;
+  paging_token: string;
+  source_account: string | null;
+  from_address: string | null;
+  to_address: string | null;
+  amount: string;
+  fee_charged: string;
+  occurred_at: Date;
+  raw_transaction: unknown | null;
+  raw_operation: unknown | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface AssetTransactionSyncState {
+  id: string;
+  asset_code: string;
+  asset_issuer: string;
+  last_paging_token: string | null;
+  last_ledger: string | null;
+  error_count: number;
+  last_error: string | null;
+  last_synced_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// ─── tracked_balances / balance_history ─────────────────────────────────────
+
+export interface TrackedBalance {
+  id: string;
+  asset_code: string;
+  asset_issuer: string | null;
+  address_label: string;
+  address: string;
+  chain: string;
+  address_type: string;
+  current_balance: string;
+  previous_balance: string;
+  balance_change: string;
+  change_percentage: string;
+  last_checked_at: Date | null;
+  last_changed_at: Date | null;
+  metadata: unknown | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface BalanceHistoryRecord {
+  id: string;
+  tracked_balance_id: string;
+  asset_code: string;
+  chain: string;
+  address: string;
+  balance: string;
+  balance_change: string;
+  change_percentage: string;
+  block_number: string | null;
+  recorded_at: Date;
+  metadata: unknown | null;
 }

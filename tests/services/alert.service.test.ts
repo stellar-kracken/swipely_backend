@@ -5,6 +5,14 @@ import {
   type MetricSnapshot,
 } from "../../src/services/alert.service.js";
 
+const suppressionServiceMock = {
+  shouldSuppress: vi.fn().mockResolvedValue({
+    suppressed: false,
+    matchedRule: null,
+    reason: null,
+  }),
+};
+
 vi.mock("../../src/database/connection.js", () => {
   const store: Record<string, unknown>[] = [];
   let idCounter = 0;
@@ -28,7 +36,7 @@ vi.mock("../../src/database/connection.js", () => {
   };
 });
 
-function makeRule(overrides: Partial<ReturnType<AlertService["mapRule" & any]>> = {}) {
+function makeRule(overrides: Record<string, unknown> = {}) {
   return {
     id: "rule-1",
     ownerAddress: "GABC",
@@ -59,7 +67,12 @@ describe("AlertService — evaluateConditions (via evaluateAsset)", () => {
   let service: AlertService;
 
   beforeEach(() => {
-    service = new AlertService();
+    suppressionServiceMock.shouldSuppress.mockResolvedValue({
+      suppressed: false,
+      matchedRule: null,
+      reason: null,
+    });
+    service = new AlertService(suppressionServiceMock as any);
   });
 
   it("fires when GT condition is exceeded", async () => {
@@ -384,6 +397,26 @@ describe("AlertService — evaluateConditions (via evaluateAsset)", () => {
     expect(types).toContain("supply_mismatch");
   });
 
+  it("does not emit an event when suppression matches", async () => {
+    vi.spyOn(service, "getActiveRulesForAsset").mockResolvedValue([makeRule()]);
+    vi.spyOn(service as any, "persistEvent").mockResolvedValue(undefined);
+    vi.spyOn(service as any, "markRuleTriggered").mockResolvedValue(undefined);
+    suppressionServiceMock.shouldSuppress.mockResolvedValue({
+      suppressed: true,
+      matchedRule: { id: "sup-1", name: "Night mute", maintenanceMode: false, expiresAt: null },
+      reason: "Suppression rule matched",
+    });
+
+    const snapshot: MetricSnapshot = {
+      assetCode: "USDC",
+      metrics: { price_deviation_bps: 300 },
+    };
+
+    const events = await service.evaluateAsset(snapshot);
+    expect(events).toHaveLength(0);
+    expect((service as any).persistEvent).not.toHaveBeenCalled();
+  });
+
   it("handles all six alert types", async () => {
     const alertTypes = [
       { metric: "price_deviation_bps", alertType: "price_deviation" },
@@ -419,7 +452,12 @@ describe("AlertService — evaluateConditions (via evaluateAsset)", () => {
       expect(events[0].alertType).toBe(alertType);
 
       vi.restoreAllMocks();
-      service = new AlertService();
+      suppressionServiceMock.shouldSuppress.mockResolvedValue({
+        suppressed: false,
+        matchedRule: null,
+        reason: null,
+      });
+      service = new AlertService(suppressionServiceMock as any);
     }
   });
 

@@ -1,6 +1,11 @@
 import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
 import { circuitBreakerQueue } from "../workers/circuitBreaker.worker.js";
+import { getMetricsService } from "./metrics.service.js";
+import {
+  alertSuppressionService,
+  type AlertSuppressionService,
+} from "./alertSuppression.service.js";
 
 export type AlertType =
   | "price_deviation"
@@ -68,6 +73,11 @@ export interface MetricSnapshot {
 }
 
 export class AlertService {
+  constructor(
+    private readonly suppressionService: Pick<AlertSuppressionService, "shouldSuppress"> =
+      alertSuppressionService
+  ) {}
+
   async createRule(
     ownerAddress: string,
     name: string,
@@ -288,6 +298,28 @@ export class AlertService {
         this.evaluateConditions(rule, snapshot.metrics);
 
       if (fires) {
+        const suppressionDecision = await this.suppressionService.shouldSuppress({
+          assetCode: snapshot.assetCode,
+          alertType,
+          priority: rule.priority,
+          source: metric,
+          at: now,
+        });
+
+        if (suppressionDecision.suppressed) {
+          logger.info(
+            {
+              ruleId: rule.id,
+              suppressionRuleId: suppressionDecision.matchedRule?.id,
+              assetCode: snapshot.assetCode,
+              alertType,
+              priority: rule.priority,
+            },
+            "Alert was suppressed before dispatch"
+          );
+          continue;
+        }
+
         const event: AlertEvent = {
           eventId: "",
           ruleId: rule.id,
@@ -619,26 +651,26 @@ export class AlertService {
 
   private async persistEvent(event: AlertEvent): Promise<void> {
     const db = getDatabase();
-    const [row] = await db("alert_events")
-      .insert({
-        time: event.time,
-        rule_id: event.ruleId,
-        asset_code: event.assetCode,
-        alert_type: event.alertType,
-        priority: event.priority,
-        triggered_value: event.triggeredValue,
-        threshold: event.threshold,
-        metric: event.metric,
-        webhook_delivered: false,
-        on_chain_event_id: event.onChainEventId,
-        lifecycle_state: "open",
-        updated_at: event.time,
-      })
-      .returning(["event_id"]);
-
-    if (row?.event_id) {
-      event.eventId = row.event_id as string;
-    }
+    await db("alert_events").insert({
+      time: event.time,
+      rule_id: event.ruleId,
+      asset_code: event.assetCode,
+      alert_type: event.alertType,
+      priority: event.priority,
+      triggered_value: event.triggeredValue,
+      threshold: event.threshold,
+      metric: event.metric,
+      webhook_delivered: false,
+      on_chain_event_id: event.onChainEventId,
+    });
+    
+    // Record alert metric
+    const metricsService = getMetricsService();
+    metricsService.alertsTriggered.inc({
+      alert_type: event.alertType,
+      priority: event.priority,
+      bridge_id: 'unknown', // AlertEvent doesn't have bridgeId, could be extracted from metric or rule
+    });
   }
 
   private async markRuleTriggered(ruleId: string, at: Date): Promise<void> {
@@ -689,7 +721,10 @@ export class AlertService {
     }
   }
 
-  private async triggerCircuitBreaker(event: AlertEvent): Promise<void> {
+  private async triggerCircuitBreaker(
+    event: AlertEvent,
+    _rule: AlertRule
+  ): Promise<void> {
     // Map alert types to circuit breaker trigger data
     const severity = event.priority === "critical" ? "high" :
                     event.priority === "high" ? "medium" : "low";
