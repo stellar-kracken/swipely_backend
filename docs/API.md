@@ -8,6 +8,8 @@ The raw OpenAPI 3.0 JSON spec is served at:
 - **http://localhost:3000/api-docs.json** (live, always in sync with code)
 - **[backend/docs/openapi.json](./openapi.json)** (checked-in snapshot)
 
+Example request flows and integration snippets live in **[backend/docs/api-usage-examples.md](./api-usage-examples.md)**.
+
 ---
 
 ## Authentication
@@ -187,6 +189,8 @@ Common HTTP status codes:
 | POST | `/import` | Import config |
 | GET | `/audit` | Audit trail |
 | POST | `/cache/clear` | Clear config cache |
+
+For the contract-side configuration history, see **[docs/contract-configuration-history.md](../docs/contract-configuration-history.md)**.
 
 ### Cache `/api/v1/cache`
 | Method | Path | Description |
