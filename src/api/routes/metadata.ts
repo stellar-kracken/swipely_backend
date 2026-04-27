@@ -1,7 +1,21 @@
 import type { FastifyInstance } from "fastify";
 import { assetMetadataService } from "../../services/assetMetadata.service";
+import { dependencyGraphService } from "../../services/dependencyGraph.service.js";
 
 export async function metadataRoutes(server: FastifyInstance) {
+  // Service dependency graph
+  server.get<{
+    Querystring: { type?: string; status?: string; q?: string };
+  }>("/dependencies", async (request) => {
+    const graph = dependencyGraphService.getGraph({
+      type: request.query.type,
+      status: request.query.status,
+      search: request.query.q,
+    });
+
+    return graph;
+  });
+
   // Get metadata by asset ID
   server.get<{ Params: { assetId: string } }>(
     "/:assetId",

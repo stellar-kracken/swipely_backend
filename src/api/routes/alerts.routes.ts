@@ -12,6 +12,10 @@ import {
   BulkCreateAlertRulesSchema,
   BulkUpdateAlertRulesSchema,
   BulkDeleteAlertRulesSchema,
+  AlertLifecycleAcknowledgeSchema,
+  AlertLifecycleAssignSchema,
+  AlertLifecycleCloseSchema,
+  BulkAlertLifecycleSchema,
   AlertHistoryQuerySchema,
   DryRunAlertSchema,
 } from "../validations/alert.schema.js";
@@ -180,7 +184,7 @@ export async function alertsRoutes(server: FastifyInstance) {
   // GET /api/v1/alerts/history - paginated history
   server.get("/history", async (request: FastifyRequest<{ Querystring: any }>) => {
     const query = AlertHistoryQuerySchema.parse(request.query);
-    const { limit, offset, page } = getPaginationParams(query);
+    const { limit, page } = getPaginationParams(query);
 
     const events = await alertService.getRecentAlerts(limit);
     const total = events.length;
@@ -241,5 +245,129 @@ export async function alertsRoutes(server: FastifyInstance) {
     const limit = parseInt(request.query.limit ?? "50", 10);
     const events = await alertService.getAlertsForRule(ruleId, limit);
     return { events };
+  });
+
+  // GET /api/v1/alerts/events/:eventId
+  server.get<{
+    Params: { eventId: string };
+    Querystring: { ownerAddress: string };
+  }>("/events/:eventId", async (request, reply) => {
+    const { ownerAddress } = request.query;
+
+    if (!ownerAddress) {
+      return reply.status(400).send({ error: "ownerAddress query param required" });
+    }
+
+    const event = await alertService.getAlertEventById(
+      request.params.eventId,
+      ownerAddress
+    );
+
+    if (!event) {
+      return reply.status(404).send({ error: "Alert event not found" });
+    }
+
+    return { event };
+  });
+
+  // PATCH /api/v1/alerts/events/:eventId/acknowledge
+  server.patch<{
+    Params: { eventId: string };
+    Body: unknown;
+  }>("/events/:eventId/acknowledge", async (request, reply) => {
+    const { ownerAddress, actor } = AlertLifecycleAcknowledgeSchema.parse(
+      request.body
+    );
+
+    const event = await alertService.acknowledgeAlert(
+      request.params.eventId,
+      ownerAddress,
+      actor
+    );
+
+    if (!event) {
+      return reply.status(404).send({ error: "Alert event not found" });
+    }
+
+    return {
+      message: "Alert acknowledged successfully",
+      event,
+    };
+  });
+
+  // PATCH /api/v1/alerts/events/:eventId/assign
+  server.patch<{
+    Params: { eventId: string };
+    Body: unknown;
+  }>("/events/:eventId/assign", async (request, reply) => {
+    const { ownerAddress, actor, assignee } = AlertLifecycleAssignSchema.parse(
+      request.body
+    );
+
+    const event = await alertService.assignAlert(
+      request.params.eventId,
+      ownerAddress,
+      assignee,
+      actor
+    );
+
+    if (!event) {
+      return reply.status(404).send({ error: "Alert event not found" });
+    }
+
+    return {
+      message: "Alert assigned successfully",
+      event,
+    };
+  });
+
+  // PATCH /api/v1/alerts/events/:eventId/close
+  server.patch<{
+    Params: { eventId: string };
+    Body: unknown;
+  }>("/events/:eventId/close", async (request, reply) => {
+    const { ownerAddress, actor, note } = AlertLifecycleCloseSchema.parse(
+      request.body
+    );
+
+    const event = await alertService.closeAlert(
+      request.params.eventId,
+      ownerAddress,
+      actor,
+      note
+    );
+
+    if (!event) {
+      return reply.status(404).send({ error: "Alert event not found" });
+    }
+
+    return {
+      message: "Alert closed successfully",
+      event,
+    };
+  });
+
+  // PATCH /api/v1/alerts/events/bulk
+  server.patch<{ Body: unknown }>("/events/bulk", async (request) => {
+    const { ownerAddress, actor, eventIds, action, note } =
+      BulkAlertLifecycleSchema.parse(request.body);
+
+    const result = await alertService.bulkLifecycleUpdate(
+      ownerAddress,
+      actor,
+      eventIds,
+      action,
+      {
+        note,
+      }
+    );
+
+    return {
+      message: `Bulk ${action} completed`,
+      updatedCount: result.updated.length,
+      notFoundCount: result.notFound.length,
+      notFound: result.notFound,
+      events: result.updated,
+    };
   });
 }

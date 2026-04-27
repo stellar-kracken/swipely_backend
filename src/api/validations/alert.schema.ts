@@ -44,6 +44,42 @@ export const BulkDeleteAlertRulesSchema = z.object({
   ruleIds: z.array(z.string().uuid()).min(1).max(100),
 });
 
+export const AlertLifecycleActorSchema = z.string().min(1).max(120);
+
+export const AlertLifecycleAcknowledgeSchema = z.object({
+  ownerAddress: z.string().min(1),
+  actor: AlertLifecycleActorSchema,
+});
+
+export const AlertLifecycleAssignSchema = z.object({
+  ownerAddress: z.string().min(1),
+  actor: AlertLifecycleActorSchema,
+  assignee: z.string().min(1).max(120),
+});
+
+export const AlertLifecycleCloseSchema = z.object({
+  ownerAddress: z.string().min(1),
+  actor: AlertLifecycleActorSchema,
+  note: z.string().max(500).optional(),
+});
+
+export const BulkAlertLifecycleSchema = z.object({
+  ownerAddress: z.string().min(1),
+  actor: AlertLifecycleActorSchema,
+  eventIds: z.array(z.string().uuid()).min(1).max(100),
+  action: z.enum(["acknowledge", "close"]),
+  assignee: z.string().min(1).max(120).optional(),
+  note: z.string().max(500).optional(),
+}).superRefine((data, ctx) => {
+  if (data.action === "acknowledge" && data.assignee) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["assignee"],
+      message: "assignee is not allowed for acknowledge action",
+    });
+  }
+});
+
 export const AlertHistoryQuerySchema = z.object({
   assetCode: z.string().optional(),
   alertType: z.string().optional(),
