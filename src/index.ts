@@ -23,6 +23,7 @@ import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
 import { registerTracing } from "./api/middleware/tracing.js";
+import { getTelegramBotService } from "./services/telegram.bot.service.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -147,6 +148,17 @@ async function start() {
 
     // Initialize webhook delivery worker
     await initWebhookWorker();
+
+    // Initialize Telegram bot service
+    const telegramService = getTelegramBotService();
+    if (config.TELEGRAM_BOT_ENABLED && config.TELEGRAM_BOT_TOKEN) {
+      try {
+        await telegramService.start();
+      } catch (error) {
+        server.log.error(error, "Failed to start Telegram bot service");
+        // Log error but don't exit - Telegram is a secondary service
+      }
+    }
   } catch (err) {
     server.log.error(err);
     process.exit(1);
@@ -155,6 +167,16 @@ async function start() {
   // ─── Graceful shutdown ──────────────────────────────────────────────────────
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "Shutdown signal received");
+
+    // Stop Telegram bot service
+    const telegramService = getTelegramBotService();
+    if (telegramService.isRunning()) {
+      try {
+        await telegramService.stop();
+      } catch (error) {
+        logger.error(error, "Error stopping Telegram bot service");
+      }
+    }
 
     await wsServer.shutdown();
     await server.close();
