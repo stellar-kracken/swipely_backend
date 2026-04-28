@@ -11,9 +11,18 @@ import { processExternalDependencyMonitor } from "./externalDependencyMonitor.jo
 import { logger } from "../utils/logger.js";
 import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
 import { runAuditRetentionJob } from "../jobs/auditRetention.job.js";
+import { runPriceCacheWarmup } from "../jobs/priceCacheWarmup.job.js";
 
 export async function initJobSystem() {
   const jobQueue = JobQueue.getInstance();
+
+  // Run price cache warmup on startup
+  try {
+    logger.info("Running startup price cache warmup");
+    await runPriceCacheWarmup();
+  } catch (error) {
+    logger.error({ error }, "Startup price cache warmup failed, continuing with job initialization");
+  }
 
   // Initialize worker with processor
   jobQueue.initWorker(async (job: Job) => {

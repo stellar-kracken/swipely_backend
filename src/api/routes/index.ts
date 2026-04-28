@@ -38,6 +38,7 @@ import { adminRotationRoutes } from "./adminRotation.js";
 import { digestSchedulerRoutes } from "./digestScheduler.js";
 import { alertSuppressionRoutes } from "./alertSuppression.js";
 import { externalDependenciesRoutes } from "./externalDependencies.routes.js";
+import { providerHealthRegistryRoutes } from "./providerHealthRegistry.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -81,4 +82,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(digestSchedulerRoutes, { prefix: "/api/v1/digest" });
   server.register(alertSuppressionRoutes, { prefix: "/api/v1/alert-suppression" });
   server.register(externalDependenciesRoutes, { prefix: "/api/v1/external-dependencies" });
+  server.register(providerHealthRegistryRoutes, { prefix: "/api/v1/providers/health" });
 }

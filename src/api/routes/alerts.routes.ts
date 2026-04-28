@@ -11,6 +11,10 @@ import {
   BulkCreateAlertRulesSchema,
   BulkUpdateAlertRulesSchema,
   BulkDeleteAlertRulesSchema,
+  AlertLifecycleAcknowledgeSchema,
+  AlertLifecycleAssignSchema,
+  AlertLifecycleCloseSchema,
+  BulkAlertLifecycleSchema,
   AlertHistoryQuerySchema,
   DryRunAlertSchema,
 } from "../validations/alert.schema.js";

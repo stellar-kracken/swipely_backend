@@ -619,13 +619,13 @@ export class SearchService {
     }
 
     if (filters.status) {
-      query = query.andWhereRaw("metadata::text ILIKE ?", [`%\"status\":\"${String(filters.status)}\"%`]);
+      query = query.andWhereRaw("metadata::text ILIKE ?", [`%"status":"${String(filters.status)}"%`]);
     }
     if (filters.severity) {
-      query = query.andWhereRaw("metadata::text ILIKE ?", [`%\"severity\":\"${String(filters.severity)}\"%`]);
+      query = query.andWhereRaw("metadata::text ILIKE ?", [`%"severity":"${String(filters.severity)}"%`]);
     }
     if (filters.priority) {
-      query = query.andWhereRaw("metadata::text ILIKE ?", [`%\"priority\":\"${String(filters.priority)}\"%`]);
+      query = query.andWhereRaw("metadata::text ILIKE ?", [`%"priority":"${String(filters.priority)}"%`]);
     }
 
     query = query.andWhere(function searchMatcher() {
