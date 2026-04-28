@@ -9,6 +9,8 @@ export interface Asset {
   bridge_provider: string | null;
   source_chain: string | null;
   is_active: boolean;
+  deactivation_reason?: string | null;
+  deactivation_date?: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -38,5 +40,39 @@ export class AssetModel {
       .update({ ...data, updated_at: new Date() })
       .returning("*");
     return asset;
+  }
+
+  async deactivate(symbol: string, reason: string | null, deactivatedBy: string): Promise<Asset | undefined> {
+    const [asset] = await this.db(this.table)
+      .where("symbol", symbol)
+      .update({
+        is_active: false,
+        deactivation_reason: reason,
+        deactivation_date: new Date(),
+        updated_at: new Date(),
+      })
+      .returning("*");
+    return asset;
+  }
+
+  async reactivate(symbol: string, activatedBy: string): Promise<Asset | undefined> {
+    const [asset] = await this.db(this.table)
+      .where("symbol", symbol)
+      .update({
+        is_active: true,
+        deactivation_reason: null,
+        deactivation_date: null,
+        updated_at: new Date(),
+      })
+      .returning("*");
+    return asset;
+  }
+
+  async findWithDeactivation(symbol: string): Promise<Asset | undefined> {
+    return this.db(this.table).where("symbol", symbol).first();
+  }
+
+  async getDeactivatedAssets(): Promise<Asset[]> {
+    return this.db(this.table).where("is_active", false).orderBy("deactivation_date", "desc");
   }
 }
