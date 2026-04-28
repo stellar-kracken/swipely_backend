@@ -3,6 +3,7 @@ import { ConnectionOptions } from "bullmq";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 import { webhookService } from "../services/webhook.service.js";
+import { retryPolicyService } from "../services/retryPolicy.service.js";
 
 // =============================================================================
 // WEBHOOK DELIVERY WORKER
@@ -16,9 +17,12 @@ const webhookConnection: ConnectionOptions = {
   password: config.REDIS_PASSWORD,
 };
 
-// Retry delays for backoff (in ms)
-const RETRY_DELAYS = [1000, 5000, 15000, 60000, 300000, 900000, 3600000];
-const MAX_RETRY_ATTEMPTS = 7;
+const WEBHOOK_RETRY_POLICY = retryPolicyService.getPolicy({
+  operation: "webhook:delivery",
+  maxRetries: 7,
+  baseDelayMs: 1000,
+  maxDelayMs: 3_600_000,
+});
 
 let webhookWorker: Worker | null = null;
 
@@ -42,9 +46,11 @@ export async function initWebhookWorker(): Promise<void> {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
-        // Calculate next retry delay
-        const delayIndex = Math.min(job.attemptsMade, RETRY_DELAYS.length - 1);
-        const delay = RETRY_DELAYS[delayIndex];
+        // Estimate next retry delay for observability.
+        const delay = retryPolicyService.getDelayMs(job.attemptsMade + 1, {
+          operation: "webhook:delivery",
+          ...WEBHOOK_RETRY_POLICY,
+        });
 
         logger.error(
           { jobId: job.id, attempt: job.attemptsMade + 1, error: errorMessage, nextRetryIn: delay },
@@ -79,7 +85,7 @@ export async function initWebhookWorker(): Promise<void> {
     const errorMessage = err.message;
 
     // Check if we've exceeded max attempts
-    if (job.attemptsMade >= MAX_RETRY_ATTEMPTS) {
+    if (job.attemptsMade >= WEBHOOK_RETRY_POLICY.maxRetries) {
       logger.error(
         { jobId: job.id, webhookEndpointId: job.data.webhookEndpointId, attempts: job.attemptsMade },
         "Webhook delivery failed permanently after max retries"

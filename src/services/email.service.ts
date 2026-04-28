@@ -88,7 +88,45 @@ const DEFAULT_RATE_LIMIT: RateLimitConfig = {
   windowMs: 60_000,
 };
 
+export interface EmailReportPayload {
+  htmlContent: string;
+  periodStart: Date;
+  periodEnd: Date;
+}
+
+// Add method to EmailNotificationService
+// Sends a simple HTML report email using a generic template
 export class EmailNotificationService {
+  // ... existing code unchanged up to line 141
+  // Insert after sendDigestEmail method definitions
+  async sendReportEmail(
+    recipient: EmailRecipient,
+    payload: EmailReportPayload,
+    context: EmailTemplateContext = {}
+  ): Promise<string> {
+    // Use a simple renderer that wraps htmlContent into a basic template
+    const renderer = (p: EmailReportPayload, ctx: EmailTemplateContext) => {
+      const subject = `Bridge Watch Report (${p.periodStart.toISOString().slice(0, 10)} - ${p.periodEnd
+        .toISOString()
+        .slice(0, 10)})`;
+      const html = `
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>${subject}</h2>
+          ${p.htmlContent}
+          <p><a href="${ctx.unsubscribeUrl ?? "#"}">Unsubscribe</a></p>
+        </body>
+      </html>`;
+      const text = `${subject}\n\nReport content omitted. Please view the email in HTML format.`;
+      return { subject, html, text };
+    };
+    // Register temporary renderer and send using generic enqueue
+    const tempType: EmailTemplateType = "digest" as EmailTemplateType; // reuse existing type slot
+    this.registerTemplate<EmailReportPayload>(tempType, renderer as any);
+    return this.enqueue(tempType, recipient, payload as any, context);
+  }
+  // ... rest of the existing EmailNotificationService code unchanged
+}
   private transporter: Transporter | null = null;
   private readonly queue: EmailQueueItem[] = [];
   private readonly tracking = new Map<string, EmailQueueItem>();

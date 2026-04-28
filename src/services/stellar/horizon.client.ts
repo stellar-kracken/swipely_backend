@@ -310,7 +310,11 @@ export class HorizonClient {
     };
 
     try {
-      const result = await withRetry(attempt, this.retries, this.retryDelayMs);
+      const result = await withRetry(attempt, this.retries, this.retryDelayMs, {
+        operation: `horizon:${label}`,
+        maxRetries: this.retries,
+        baseDelayMs: this.retryDelayMs,
+      });
       this.metrics.successfulRequests++;
       this.metrics.totalLatencyMs += Date.now() - start;
       logger.debug({ label, latencyMs: Date.now() - start }, "Horizon request succeeded");

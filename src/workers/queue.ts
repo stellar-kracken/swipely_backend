@@ -1,6 +1,7 @@
 import { Queue, Worker, Job, ConnectionOptions } from "bullmq";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
+import { retryPolicyService } from "../services/retryPolicy.service.js";
 
 const connection: ConnectionOptions = {
   host: config.REDIS_HOST,
@@ -16,14 +17,12 @@ export class JobQueue {
   private worker: Worker | null = null;
 
   private constructor() {
+    const retryPolicy = retryPolicyService.getPolicy({ operation: "queue:default" });
     this.queue = new Queue(QUEUE_NAME, {
       connection,
       defaultJobOptions: {
-        attempts: config.RETRY_MAX || 3,
-        backoff: {
-          type: "exponential",
-          delay: 1000,
-        },
+        attempts: retryPolicy.maxRetries + 1,
+        backoff: retryPolicyService.getBullMQBackoff({ operation: "queue:default" }),
         removeOnComplete: true,
         removeOnFail: false,
       },
