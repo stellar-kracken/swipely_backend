@@ -14,16 +14,18 @@ CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 -- assets
 -- Monitored Stellar assets (native + bridged).
 CREATE TABLE assets (
-  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  symbol        TEXT        NOT NULL UNIQUE,
-  name          TEXT        NOT NULL,
-  issuer        TEXT,                                          -- NULL for native XLM
-  asset_type    TEXT        NOT NULL,                         -- native | credit_alphanum4 | credit_alphanum12
-  bridge_provider TEXT,                                       -- Circle, Wormhole, PayPal, etc.
-  source_chain  TEXT,                                         -- Ethereum, etc.
-  is_active     BOOLEAN     NOT NULL DEFAULT TRUE,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  symbol              TEXT        NOT NULL UNIQUE,
+  name                TEXT        NOT NULL,
+  issuer              TEXT,                                          -- NULL for native XLM
+  asset_type          TEXT        NOT NULL,                         -- native | credit_alphanum4 | credit_alphanum12
+  bridge_provider     TEXT,                                          -- Circle, Wormhole, PayPal, etc.
+  source_chain        TEXT,                                          -- Ethereum, etc.
+  is_active           BOOLEAN     NOT NULL DEFAULT TRUE,
+  deactivation_reason TEXT,
+  deactivation_date   TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- bridges
@@ -353,3 +355,20 @@ CREATE INDEX verification_results_bridge_time_idx     ON verification_results (b
 CREATE INDEX verification_results_bridge_sequence_idx ON verification_results (bridge_id, sequence);
 SELECT create_hypertable('verification_results', 'verified_at', if_not_exists => TRUE);
 SELECT add_retention_policy('verification_results', INTERVAL '90 days', if_not_exists => TRUE);
+
+-- =============================================================================
+-- ASSET LIFECYCLE TABLES
+-- =============================================================================
+
+-- asset_lifecycle_events
+-- Audit log for asset deactivation/reactivation events.
+CREATE TABLE asset_lifecycle_events (
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  asset_symbol    TEXT        NOT NULL REFERENCES assets(symbol) ON DELETE CASCADE,
+  event_type      TEXT        NOT NULL,                           -- deactivated | reactivated
+  reason          TEXT,
+  performed_by    TEXT        NOT NULL,
+  timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX asset_lifecycle_events_symbol_time_idx ON asset_lifecycle_events (asset_symbol, timestamp DESC);
+CREATE INDEX asset_lifecycle_events_type_idx        ON asset_lifecycle_events (event_type);
