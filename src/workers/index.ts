@@ -57,6 +57,7 @@ export async function initJobSystem() {
         break;
       case "external-dependency-monitor":
         await processExternalDependencyMonitor(job);
+        break;
       case "reconciliation":
         await processReconciliation(job as any);
         break;
