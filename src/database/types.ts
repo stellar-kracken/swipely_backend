@@ -52,6 +52,7 @@ export interface BridgeTransactionSummary {
   confirmedTransactions: number;
   failedTransactions: number;
 }
+export type ReconciliationStatus = "running" | "success" | "mismatch" | "failed";
 
 // ─── assets ──────────────────────────────────────────────────────────────────
 
@@ -199,6 +200,24 @@ export interface VerificationResult {
   proof_depth: number | null;
   metadata: unknown | null;
   job_id: string | null;
+}
+
+// ─── reconciliation_runs (hypertable) ────────────────────────────────────────
+
+export interface ReconciliationRun {
+  started_at: Date;
+  id: string;
+  asset_code: string;
+  job_id: string | null;
+  status: ReconciliationStatus;
+  stellar_supply: string | null;
+  reported_supply: string | null;
+  mismatch_percentage: string | null;
+  attempt: number;
+  error: string | null;
+  finished_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
 }
 
 // ─── alert_rules ─────────────────────────────────────────────────────────────
