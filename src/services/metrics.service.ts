@@ -45,6 +45,10 @@ class MetricsService {
   public cacheMisses: Counter;
   public cacheSize: Gauge;
   public cacheEvictions: Counter;
+  public cachePrimingTotal: Counter;
+  public cachePrimingSuccess: Counter;
+  public cachePrimingFailure: Counter;
+  public cachePrimingDuration: Histogram;
 
   // API Key Metrics
   public apiKeyRequests: Counter;
@@ -85,6 +89,10 @@ class MetricsService {
     this.cacheMisses = undefined as any;
     this.cacheSize = undefined as any;
     this.cacheEvictions = undefined as any;
+    this.cachePrimingTotal = undefined as any;
+    this.cachePrimingSuccess = undefined as any;
+    this.cachePrimingFailure = undefined as any;
+    this.cachePrimingDuration = undefined as any;
     this.apiKeyRequests = undefined as any;
     this.apiKeyRateLimitHits = undefined as any;
     this.websocketConnections = undefined as any;
@@ -294,6 +302,35 @@ class MetricsService {
       name: "cache_evictions_total",
       help: "Total number of cache evictions",
       labelNames: ["cache_name", "reason"],
+      registers: [this.registry],
+    });
+
+    this.cachePrimingTotal = new Counter({
+      name: "cache_priming_total",
+      help: "Total number of cache priming attempts",
+      labelNames: ["task_name"],
+      registers: [this.registry],
+    });
+
+    this.cachePrimingSuccess = new Counter({
+      name: "cache_priming_success_total",
+      help: "Total number of successful cache priming tasks",
+      labelNames: ["task_name"],
+      registers: [this.registry],
+    });
+
+    this.cachePrimingFailure = new Counter({
+      name: "cache_priming_failure_total",
+      help: "Total number of failed cache priming tasks",
+      labelNames: ["task_name", "reason"],
+      registers: [this.registry],
+    });
+
+    this.cachePrimingDuration = new Histogram({
+      name: "cache_priming_duration_seconds",
+      help: "Duration of cache priming tasks in seconds",
+      labelNames: ["task_name"],
+      buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60],
       registers: [this.registry],
     });
 

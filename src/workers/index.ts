@@ -11,17 +11,18 @@ import { processExternalDependencyMonitor } from "./externalDependencyMonitor.jo
 import { logger } from "../utils/logger.js";
 import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
 import { runAuditRetentionJob } from "../jobs/auditRetention.job.js";
-import { runPriceCacheWarmup } from "../jobs/priceCacheWarmup.job.js";
+import { processCachePriming } from "./cachePrimer.job.js";
 
 export async function initJobSystem() {
   const jobQueue = JobQueue.getInstance();
 
-  // Run price cache warmup on startup
+  // Run high-priority cache priming on startup
   try {
-    logger.info("Running startup price cache warmup");
-    await runPriceCacheWarmup();
+    const { cachePrimerService, CachePriority } = await import("../services/cachePrimer.service.js");
+    logger.info("Running startup high-priority cache priming");
+    await cachePrimerService.prime(CachePriority.HIGH);
   } catch (error) {
-    logger.error({ error }, "Startup price cache warmup failed, continuing with job initialization");
+    logger.error({ error }, "Startup cache priming failed, continuing with job initialization");
   }
 
   // Initialize worker with processor
@@ -56,6 +57,9 @@ export async function initJobSystem() {
         break;
       case "external-dependency-monitor":
         await processExternalDependencyMonitor(job);
+        break;
+      case "cache-priming":
+        await processCachePriming(job);
         break;
       default:
         logger.warn({ jobName: job.name }, "Unknown job name in worker");
@@ -125,6 +129,10 @@ export async function initJobSystem() {
 
   // External dependency checks: every 2 minutes
   await jobQueue.addRepeatableJob("external-dependency-monitor", {}, "*/2 * * * *");
+
+  // Cache priming: High priority every hour, Full every day at 03:00 UTC
+  await jobQueue.addRepeatableJob("cache-priming", { priority: "high" }, "0 * * * *");
+  await jobQueue.addRepeatableJob("cache-priming", {}, "0 3 * * *");
 
   logger.info("Scheduled job system initialized");
 }
