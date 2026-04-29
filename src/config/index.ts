@@ -167,6 +167,12 @@ const envSchema = z.object({
   HEALTH_CHECK_DISK_THRESHOLD: z.coerce.number().default(80),
   HEALTH_CHECK_EXTERNAL_APIS: z.string().default("true"),
 
+  // Maintenance & Data Handoff
+  MAINTENANCE_MODE: z.coerce.boolean().default(false),
+  MAINTENANCE_MESSAGE: z.string().default("System is under maintenance"),
+  MAINTENANCE_SEVERITY: z.enum(["info", "warning", "critical"]).default("warning"),
+  STATUS_PAGE_URL: z.string().url().optional(),
+
   // Data Validation Configuration
   VALIDATION_STRICT_MODE: z.coerce.boolean().default(false),
   VALIDATION_ADMIN_BYPASS: z.coerce.boolean().default(true),
