@@ -12,6 +12,7 @@
 import { redis } from "../../utils/redis.js";
 import { logger } from "../../utils/logger.js";
 import { withRetry } from "../../utils/retry.js";
+import { schemaDriftService } from "../schemaDrift.service.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -198,6 +199,11 @@ export class CoinGeckoSource {
     }
 
     const body = (await response.json()) as CoinGeckoSimplePriceResponse;
+
+    // Check for schema drift
+    await schemaDriftService.checkDrift("CoinGecko:SimplePrice", body).catch(err => 
+      logger.error({ err }, "Schema drift check failed for CoinGecko:SimplePrice")
+    );
 
     const results: CoinGeckoPriceResult[] = [];
     for (const [idx, id] of ids.entries()) {

@@ -13,7 +13,8 @@ export type AlertType =
   | "bridge_downtime"
   | "health_score_drop"
   | "volume_anomaly"
-  | "reserve_ratio_breach";
+  | "reserve_ratio_breach"
+  | "schema_drift";
 
 export type AlertPriority = "critical" | "high" | "medium" | "low";
 export type ConditionOp = "AND" | "OR";
