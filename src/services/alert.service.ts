@@ -2,6 +2,7 @@ import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
 import { circuitBreakerQueue } from "../workers/circuitBreaker.worker.js";
 import { getMetricsService } from "./metrics.service.js";
+import { alertRoutingService } from "./alertRouting.service.js";
 import {
   alertSuppressionService,
   type AlertSuppressionService,
@@ -13,7 +14,8 @@ export type AlertType =
   | "bridge_downtime"
   | "health_score_drop"
   | "volume_anomaly"
-  | "reserve_ratio_breach";
+  | "reserve_ratio_breach"
+  | "schema_drift";
 
 export type AlertPriority = "critical" | "high" | "medium" | "low";
 export type ConditionOp = "AND" | "OR";
@@ -352,12 +354,23 @@ export class AlertService {
           logger.error({ ruleId: rule.id, err }, "Circuit breaker trigger failed")
         );
 
-        if (rule.webhookUrl) {
-          await this.dispatchWebhook(rule.webhookUrl, event, rule).catch(
-            (err) =>
-              logger.warn({ ruleId: rule.id, err }, "Webhook dispatch failed")
+        await alertRoutingService
+          .routeAlert({
+            eventTime: event.time,
+            alertRuleId: rule.id,
+            ownerAddress: rule.ownerAddress,
+            ruleName: rule.name,
+            assetCode: event.assetCode,
+            sourceType: event.alertType,
+            severity: event.priority,
+            triggeredValue: event.triggeredValue,
+            threshold: event.threshold,
+            metric: event.metric,
+            webhookUrl: rule.webhookUrl,
+          })
+          .catch((err) =>
+            logger.warn({ ruleId: rule.id, err }, "Alert routing dispatch failed")
           );
-        }
       }
     }
 

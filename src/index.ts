@@ -23,7 +23,8 @@ import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
 import { registerTracing } from "./api/middleware/tracing.js";
-import { getTelegramBotService } from "./services/telegram.bot.service.js";
+import { getDatabase } from "./database/connection.js";
+import { initializeOutboxSystem, startOutboxSystem, stopOutboxSystem } from "./outbox/index.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -131,6 +132,61 @@ export async function buildServer() {
     },
   );
 
+  // Outbox health check endpoint
+  server.get(
+    "/api/v1/health/outbox",
+    {
+      schema: {
+        tags: ["Health"],
+        summary: "Outbox system health check",
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", enum: ["healthy", "degraded", "unhealthy"] },
+              details: {
+                type: "object",
+                properties: {
+                  initialized: { type: "boolean" },
+                  dispatcherRunning: { type: "boolean" },
+                  pendingEvents: { type: "number" },
+                  failedEvents: { type: "number" },
+                  deadLetterEvents: { type: "number" },
+                },
+              },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { getOutboxSystem } = await import("../../outbox/index.js");
+        const outboxSystem = getOutboxSystem();
+        const healthCheck = await outboxSystem.healthCheck();
+        
+        return {
+          ...healthCheck,
+          timestamp: new Date().toISOString(),
+        };
+      } catch (error) {
+        return reply.code(503).send({
+          status: "unhealthy",
+          details: {
+            initialized: false,
+            dispatcherRunning: false,
+            pendingEvents: 0,
+            failedEvents: 0,
+            deadLetterEvents: 0,
+          },
+          error: "Outbox system not available",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    },
+  );
+
   return server;
 }
 
@@ -143,22 +199,20 @@ async function start() {
       `Stellar Bridge Watch API running on port ${config.PORT}`
     );
 
+    // Initialize outbox system first (before other background services)
+    const db = getDatabase();
+    await initializeOutboxSystem(db);
+    server.log.info("Outbox system initialized");
+
     // Initialize background jobs
     await initJobSystem();
 
     // Initialize webhook delivery worker
     await initWebhookWorker();
 
-    // Initialize Telegram bot service
-    const telegramService = getTelegramBotService();
-    if (config.TELEGRAM_BOT_ENABLED && config.TELEGRAM_BOT_TOKEN) {
-      try {
-        await telegramService.start();
-      } catch (error) {
-        server.log.error(error, "Failed to start Telegram bot service");
-        // Log error but don't exit - Telegram is a secondary service
-      }
-    }
+    // Start outbox dispatcher (after all other systems are ready)
+    await startOutboxSystem();
+    server.log.info("Outbox dispatcher started");
   } catch (err) {
     server.log.error(err);
     process.exit(1);
@@ -168,15 +222,9 @@ async function start() {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "Shutdown signal received");
 
-    // Stop Telegram bot service
-    const telegramService = getTelegramBotService();
-    if (telegramService.isRunning()) {
-      try {
-        await telegramService.stop();
-      } catch (error) {
-        logger.error(error, "Error stopping Telegram bot service");
-      }
-    }
+    // Stop outbox system first
+    await stopOutboxSystem();
+    logger.info("Outbox system stopped");
 
     await wsServer.shutdown();
     await server.close();
