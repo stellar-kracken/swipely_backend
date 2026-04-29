@@ -160,6 +160,17 @@ const envSchema = z.object({
   DISCORD_BOT_TOKEN: z.string().optional(),
   DISCORD_CLIENT_ID: z.string().optional(),
 
+  // Telegram Bot Configuration
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_WEBHOOK_URL: z.string().url().optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+  TELEGRAM_RATE_LIMIT_OUTBOUND_GLOBAL_PER_SEC: z.coerce.number().default(30),
+  TELEGRAM_RATE_LIMIT_OUTBOUND_PER_CHAT_PER_SEC: z.coerce.number().default(1),
+  TELEGRAM_RATE_LIMIT_INBOUND_COMMANDS_PER_WINDOW: z.coerce.number().default(5),
+  TELEGRAM_RATE_LIMIT_INBOUND_WINDOW_SEC: z.coerce.number().default(30),
+  TELEGRAM_ADMIN_CHAT_IDS: z.string().optional(),
+  TELEGRAM_BOT_ENABLED: z.coerce.boolean().default(true),
+
   // Health Check Configuration
   HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().default(5000),
   HEALTH_CHECK_INTERVAL_MS: z.coerce.number().default(30000),
