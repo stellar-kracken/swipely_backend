@@ -237,6 +237,50 @@ export interface AlertEvent {
   on_chain_event_id: string | null; // bigint
 }
 
+// ─── alert_routing_rules / alert_routing_audit ─────────────────────────────
+
+export type AlertRoutingChannel = "in_app" | "webhook" | "email";
+export type AlertRoutingAuditStatus =
+  | "queued"
+  | "delivered"
+  | "suppressed"
+  | "failed"
+  | "fallback";
+
+export interface AlertRoutingRuleRecord {
+  id: string;
+  name: string;
+  owner_address: string | null;
+  severity_levels: AlertPriority[];
+  asset_codes: string[];
+  source_types: string[];
+  channels: AlertRoutingChannel[];
+  fallback_channels: AlertRoutingChannel[];
+  suppression_window_seconds: number;
+  priority_order: number;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface AlertRoutingAuditRecord {
+  id: string;
+  event_time: Date;
+  alert_rule_id: string;
+  routing_rule_id: string | null;
+  owner_address: string;
+  asset_code: string;
+  source_type: string;
+  severity: AlertPriority;
+  channel: string;
+  status: AlertRoutingAuditStatus;
+  reason: string | null;
+  attempt_count: number;
+  latency_ms: number | null;
+  created_at: Date;
+}
+
 // ─── circuit_breaker_triggers ────────────────────────────────────────────────
 
 export interface CircuitBreakerTrigger {

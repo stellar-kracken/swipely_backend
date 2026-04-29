@@ -17,6 +17,7 @@ import { logger } from "../../utils/logger.js";
 import { config } from "../../config/index.js";
 import { withRetry } from "../../utils/retry.js";
 import { PriceFetchError } from "../price.service.js";
+import { schemaDriftService } from "../schemaDrift.service.js";
 
 // ---------------------------------------------------------------------------
 // Circle API response shapes
@@ -313,6 +314,12 @@ export class CircleSource {
     }
 
     const body = (await response.json()) as CircleStablecoinsResponse;
+
+    // Check for schema drift
+    await schemaDriftService.checkDrift("Circle:Stablecoins", body).catch(err => 
+      logger.error({ err }, "Schema drift check failed for Circle:Stablecoins")
+    );
+
     return body.data ?? [];
   }
 
@@ -352,6 +359,12 @@ export class CircleSource {
 
       if (response.ok) {
         const body = (await response.json()) as CircleExchangeRatesResponse;
+
+        // Check for schema drift
+        await schemaDriftService.checkDrift("Circle:ExchangeRates", body).catch(err => 
+          logger.error({ err }, "Schema drift check failed for Circle:ExchangeRates")
+        );
+
         const usdRate = body.data?.rates?.["USD"];
 
         if (usdRate && !isNaN(parseFloat(usdRate))) {

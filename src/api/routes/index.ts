@@ -19,6 +19,7 @@ import { healthRoutes } from "./health.js";
 import { rateLimitAdminRoutes } from "./rateLimitAdmin.js";
 import { tracingAdminRoutes } from "./tracingAdmin.js";
 import { validationAdminRoutes } from "./validationAdmin.js";
+import { alertRoutingAdminRoutes } from "./alertRoutingAdmin.js";
 import { metricsRoutes } from "./metrics.js";
 import { priceFeedsRoutes } from "./priceFeeds.js";
 import { supplyChainRoutes } from "./supplyChain.js";
@@ -39,6 +40,7 @@ import { digestSchedulerRoutes } from "./digestScheduler.js";
 import { alertSuppressionRoutes } from "./alertSuppression.js";
 import { externalDependenciesRoutes } from "./externalDependencies.routes.js";
 import { providerHealthRegistryRoutes } from "./providerHealthRegistry.routes.js";
+import { outboxAdminRoutes } from "./outbox-admin.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -63,6 +65,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(rateLimitAdminRoutes, { prefix: "/api/v1/admin/rate-limit" });
   server.register(tracingAdminRoutes, { prefix: "/api/v1/admin/tracing" });
   server.register(validationAdminRoutes, { prefix: "/api/v1/admin/validation" });
+  server.register(alertRoutingAdminRoutes, { prefix: "/api/v1/admin/alert-routing" });
   server.register(metricsRoutes, { prefix: "/metrics" });
   server.register(priceFeedsRoutes, { prefix: "/api/v1/price-feeds" });
   server.register(supplyChainRoutes, { prefix: "/api/v1/supply-chain" });
@@ -83,4 +86,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(alertSuppressionRoutes, { prefix: "/api/v1/alert-suppression" });
   server.register(externalDependenciesRoutes, { prefix: "/api/v1/external-dependencies" });
   server.register(providerHealthRegistryRoutes, { prefix: "/api/v1/providers/health" });
+  server.register(outboxAdminRoutes, { prefix: "/api/v1/admin/outbox" });
 }
