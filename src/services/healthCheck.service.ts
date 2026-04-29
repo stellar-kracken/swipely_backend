@@ -30,6 +30,12 @@ export interface SystemHealthResponse {
     unhealthy: number;
     degraded: number;
   };
+  maintenance?: {
+    active: boolean;
+    message: string;
+    severity: "info" | "warning" | "critical";
+    statusPageUrl?: string;
+  };
 }
 
 export interface LivenessResponse {
@@ -91,6 +97,12 @@ export class HealthCheckService {
       version: process.env.npm_package_version || "0.1.0",
       checks: results,
       summary,
+      maintenance: {
+        active: config.MAINTENANCE_MODE,
+        message: config.MAINTENANCE_MESSAGE,
+        severity: config.MAINTENANCE_SEVERITY,
+        statusPageUrl: config.STATUS_PAGE_URL,
+      },
     };
   }
 
