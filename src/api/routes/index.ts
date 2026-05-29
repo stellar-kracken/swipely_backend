@@ -42,6 +42,7 @@ import { alertSuppressionRoutes } from "./alertSuppression.js";
 import { externalDependenciesRoutes } from "./externalDependencies.routes.js";
 import { providerHealthRegistryRoutes } from "./providerHealthRegistry.routes.js";
 import { reconciliationRoutes } from "./reconciliation.js";
+import { statusSubscriptionsRoutes } from "./statusSubscriptions.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -89,4 +90,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(externalDependenciesRoutes, { prefix: "/api/v1/external-dependencies" });
   server.register(providerHealthRegistryRoutes, { prefix: "/api/v1/providers/health" });
   server.register(reconciliationRoutes, { prefix: "/api/v1/reconciliation" });
+  server.register(statusSubscriptionsRoutes, { prefix: "/api/v1/status-subscriptions" });
 }
