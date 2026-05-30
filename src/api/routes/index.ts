@@ -43,6 +43,8 @@ import { externalDependenciesRoutes } from "./externalDependencies.routes.js";
 import { providerHealthRegistryRoutes } from "./providerHealthRegistry.routes.js";
 import { reconciliationRoutes } from "./reconciliation.js";
 import { statusSubscriptionsRoutes } from "./statusSubscriptions.js";
+import { externalRateLimitMetricsRoutes } from "./externalRateLimitMetrics.routes.js";
+import { eventSubscriptionFilterRoutes } from "./eventSubscriptionFilter.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -91,4 +93,10 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(providerHealthRegistryRoutes, { prefix: "/api/v1/providers/health" });
   server.register(reconciliationRoutes, { prefix: "/api/v1/reconciliation" });
   server.register(statusSubscriptionsRoutes, { prefix: "/api/v1/status-subscriptions" });
+  server.register(externalRateLimitMetricsRoutes, {
+    prefix: "/api/v1/metrics/external-rate-limits",
+  });
+  server.register(eventSubscriptionFilterRoutes, {
+    prefix: "/api/v1/event-subscriptions",
+  });
 }

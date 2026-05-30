@@ -7,6 +7,7 @@
 import { z } from "zod";
 import { getDatabase } from "../database/connection";
 import { logger } from "../utils/logger";
+import { featureFlagAuditService } from "./featureFlagAudit.service";
 import {
   createHash,
   createCipheriv,
@@ -318,38 +319,75 @@ export class ConfigService {
       environment?: string;
       rolloutPercentage?: number;
       conditions?: Record<string, unknown>;
+      changedBy?: string;
+      changeReason?: string;
     },
   ): Promise<void> {
     const db = getDatabase();
     const env = options?.environment || this.environment;
+    const changedBy = options?.changedBy ?? "system";
 
     try {
       const existing = await db("feature_flags")
         .where({ name, environment: env })
         .first();
 
+      const oldValue = existing
+        ? {
+            enabled: existing.enabled,
+            rolloutPercentage: existing.rollout_percentage,
+            conditions:
+              typeof existing.conditions === "string"
+                ? JSON.parse(existing.conditions)
+                : existing.conditions,
+          }
+        : null;
+
+      const newValue = {
+        enabled,
+        rolloutPercentage: options?.rolloutPercentage ?? existing?.rollout_percentage ?? 100,
+        conditions: options?.conditions ?? (oldValue?.conditions as Record<string, unknown>) ?? {},
+      };
+
       if (existing) {
         await db("feature_flags")
           .where({ name, environment: env })
           .update({
             enabled,
-            rollout_percentage:
-              options?.rolloutPercentage ?? existing.rollout_percentage,
-            conditions: JSON.stringify(
-              options?.conditions || existing.conditions,
-            ),
+            rollout_percentage: newValue.rolloutPercentage,
+            conditions: JSON.stringify(newValue.conditions),
             updated_at: new Date(),
           });
+
+        await featureFlagAuditService.recordChange({
+          flagName: name,
+          environment: env,
+          action: "update",
+          oldValue,
+          newValue,
+          changedBy,
+          changeReason: options?.changeReason,
+        });
       } else {
         await db("feature_flags").insert({
           id: randomBytes(16).toString("hex"),
           name,
           enabled,
           environment: env,
-          rollout_percentage: options?.rolloutPercentage ?? 100,
-          conditions: JSON.stringify(options?.conditions || {}),
+          rollout_percentage: newValue.rolloutPercentage,
+          conditions: JSON.stringify(newValue.conditions),
           created_at: new Date(),
           updated_at: new Date(),
+        });
+
+        await featureFlagAuditService.recordChange({
+          flagName: name,
+          environment: env,
+          action: "create",
+          oldValue: null,
+          newValue,
+          changedBy,
+          changeReason: options?.changeReason,
         });
       }
 
