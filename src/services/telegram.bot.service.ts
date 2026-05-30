@@ -85,7 +85,7 @@ export class TelegramBotService {
         config.NODE_ENV === "development"
       ) {
         // Development: use polling
-        await this.bot.launch({ polling: { timeout: 25, limit: 100 } });
+        await this.bot.launch({ polling: { timeout: 25, limit: 100 } } as any);
         logger.info("Telegram bot started in polling mode (development)");
       } else {
         throw new Error(
@@ -193,7 +193,7 @@ export class TelegramBotService {
   private setupMiddleware(): void {
     // Rate limiting middleware for commands
     this.bot.use((ctx, next) => {
-      if (ctx.message && ctx.message.text?.startsWith("/")) {
+      if (ctx.message && (ctx.message as any).text?.startsWith("/")) {
         const chatId = ctx.chat?.id.toString() || "unknown";
         if (!this.checkRateLimit(chatId)) {
           ctx.reply(
@@ -208,7 +208,7 @@ export class TelegramBotService {
     // Logging middleware
     this.bot.use((ctx, next) => {
       const chatId = ctx.chat?.id;
-      const messageType = ctx.message?.type || ctx.callback_query ? "callback" : "unknown";
+      const messageType = (ctx.message as any)?.type || (ctx as any).callback_query ? "callback" : "unknown";
 
       logger.debug(
         {
@@ -413,7 +413,7 @@ export class TelegramBotService {
         await ctx.reply(`✓ Subscription updated`);
       } catch (error) {
         logger.error(error, "Error in callback query");
-        ctx.answerCbQuery("An error occurred", true);
+        (ctx as any).answerCbQuery("An error occurred", true);
       }
     });
 
@@ -842,7 +842,11 @@ export class TelegramBotService {
    * Subscribe to alert events from Redis
    */
   private subscribeToAlertEvents(): void {
-    const alertChannel = this.redis.createClient();
+    const alertChannel = new Redis({
+      host: config.REDIS_HOST,
+      port: config.REDIS_PORT,
+      password: config.REDIS_PASSWORD || undefined,
+    });
 
     alertChannel.subscribe("bw:alerts:created", (err) => {
       if (err) {

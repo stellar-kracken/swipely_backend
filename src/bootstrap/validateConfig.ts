@@ -11,6 +11,7 @@ import { createRedisClient } from "../config/redis.js";
 import { ConfigService } from "../services/config-service/ConfigService.js";
 import { ConfigKey } from "../services/config-service/validators.js";
 import { logger } from "../utils/logger.js";
+import type Redis from "ioredis";
 
 /**
  * Required configuration keys that must be present for the application to start
@@ -55,7 +56,7 @@ export async function validateStartupConfig(): Promise<void> {
 
   try {
     const db = getDatabase();
-    const redis = createRedisClient();
+    const redis = createRedisClient() as Redis;
     const configService = new ConfigService(db, redis);
 
     const missing: string[] = [];
@@ -129,7 +130,7 @@ export async function validateOptionalConfig(): Promise<void> {
 
   try {
     const db = getDatabase();
-    const redis = createRedisClient();
+    const redis = createRedisClient() as Redis;
     const configService = new ConfigService(db, redis);
 
     const missing: string[] = [];

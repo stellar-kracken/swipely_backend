@@ -122,7 +122,7 @@ export class EmailNotificationService {
     };
     // Register temporary renderer and send using generic enqueue
     const tempType: EmailTemplateType = "digest" as EmailTemplateType; // reuse existing type slot
-    this.registerTemplate<EmailReportPayload>(tempType, renderer as any);
+    (this as any).registerTemplate(tempType, renderer);
     return this.enqueue(tempType, recipient, payload as any, context);
   }
   private transporter: Transporter | null = null;

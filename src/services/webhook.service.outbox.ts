@@ -1,4 +1,5 @@
 import type { Knex } from "knex";
+import { randomBytes } from "crypto";
 import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
 import { OutboxProducer } from "../outbox/eventProducer.js";
@@ -212,7 +213,7 @@ export class OutboxWebhookService {
       await this.outboxProducer.publishTransactional(tx, {
         aggregateType: "Webhook",
         aggregateId: endpointId,
-        eventType: "webhook.endpoint_created",
+        eventType: "webhook.endpoint_created" as any,
         payload: {
           endpointId,
           ownerAddress,
@@ -279,7 +280,7 @@ export class OutboxWebhookService {
       await this.outboxProducer.publishTransactional(tx, {
         aggregateType: "Webhook",
         aggregateId: endpointId,
-        eventType: "webhook.endpoint_updated",
+        eventType: "webhook.endpoint_updated" as any,
         payload: {
           endpointId,
           ownerAddress,
@@ -322,7 +323,7 @@ export class OutboxWebhookService {
   }
 
   private generateSecret(): string {
-    return crypto.randomBytes(32).toString("hex");
+    return randomBytes(32).toString("hex");
   }
 
   private mapToEndpoint(row: any): WebhookEndpoint {

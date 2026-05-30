@@ -32,19 +32,19 @@ export class CachePrimerService {
       {
         name: "protocol_stats",
         priority: CachePriority.HIGH,
-        execute: () => this.analyticsService.getProtocolStats(true),
+        execute: async () => { await this.analyticsService.getProtocolStats(true); },
       },
       // HIGH PRIORITY: Bridge Comparisons
       {
         name: "bridge_comparisons",
         priority: CachePriority.HIGH,
-        execute: () => this.analyticsService.getBridgeComparisons(true),
+        execute: async () => { await this.analyticsService.getBridgeComparisons(true); },
       },
       // HIGH PRIORITY: Top Assets by Health
       {
         name: "top_assets_health",
         priority: CachePriority.HIGH,
-        execute: () => this.analyticsService.getTopPerformers("assets", "health", 10, true),
+        execute: async () => { await this.analyticsService.getTopPerformers("assets", "health", 10, true); },
       },
       // HIGH PRIORITY: Prices for major assets
       {
@@ -61,7 +61,7 @@ export class CachePrimerService {
       {
         name: "asset_rankings",
         priority: CachePriority.LOW,
-        execute: () => this.analyticsService.getAssetRankings(true),
+        execute: async () => { await this.analyticsService.getAssetRankings(true); },
       },
       // LOW PRIORITY: All other prices
       {

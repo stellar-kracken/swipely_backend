@@ -41,7 +41,7 @@ export async function sessionsRoutes(server: FastifyInstance) {
     ) => {
       try {
         const { session, token } = await sessionService.createSession({
-          ...request.body,
+          ...(request.body as any),
           ipAddress: request.ip,
           userAgent: request.body.userAgent ?? request.headers["user-agent"],
         });
