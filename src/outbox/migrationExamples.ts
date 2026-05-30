@@ -521,6 +521,7 @@ export class OutboxMigrationUtils {
     let offset = 0;
     let processedCount = 0;
 
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const rows = await db(tableName)
         .select("*")

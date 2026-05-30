@@ -125,8 +125,6 @@ export class EmailNotificationService {
     this.registerTemplate<EmailReportPayload>(tempType, renderer as any);
     return this.enqueue(tempType, recipient, payload as any, context);
   }
-  // ... rest of the existing EmailNotificationService code unchanged
-}
   private transporter: Transporter | null = null;
   private readonly queue: EmailQueueItem[] = [];
   private readonly tracking = new Map<string, EmailQueueItem>();

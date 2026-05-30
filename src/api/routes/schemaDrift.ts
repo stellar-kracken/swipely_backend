@@ -105,7 +105,7 @@ export default async function schemaDriftRoutes(fastify: FastifyInstance) {
       
       try {
         // We use the payload to generate the new baseline
-        const (schemaDriftService as any).saveBaseline(sourceName, (schemaDriftService as any).extractSchema(payload));
+        (schemaDriftService as any).saveBaseline(sourceName, (schemaDriftService as any).extractSchema(payload));
         return reply.send({ success: true, message: `Baseline updated for ${sourceName}` });
       } catch (err) {
         logger.error({ err, sourceName }, "Failed to update baseline schema");
