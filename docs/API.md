@@ -37,6 +37,22 @@ Current metrics are available at `GET /api/v1/metrics/rate-limits`.
 
 ---
 
+## Pagination
+
+List endpoints use **page/limit**, **offset/limit**, or **Horizon cursor** pagination depending on the route. Parameter names and response shapes are not fully uniform.
+
+See the full integrator guide: **[docs/pagination-guide.md](../../docs/pagination-guide.md)**.
+
+Quick reference:
+
+- Shared helper defaults: `page=1`, `limit=50`, max `limit=100` (`backend/src/utils/pagination.ts`)
+- Alerts history: `GET /api/v1/alerts/history?page=&limit=` → `{ data, meta }`
+- Incidents: `GET /api/v1/incidents?limit=&offset=` → `{ incidents, total }`
+- Transactions: `GET /api/v1/transactions?page=&pageSize=` → flat pagination fields
+- Horizon fetch: `POST /api/v1/transactions/fetch` with body `cursor` (not SQL offset)
+
+---
+
 ## API Versioning
 
 All REST endpoints are prefixed with `/api/v1/`. When a breaking change is introduced a new version prefix (`/api/v2/`) is added and the previous version is maintained for **at least 90 days** before deprecation.
