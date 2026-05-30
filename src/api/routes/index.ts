@@ -45,6 +45,7 @@ import { reconciliationRoutes } from "./reconciliation.js";
 import { statusSubscriptionsRoutes } from "./statusSubscriptions.js";
 import { externalRateLimitMetricsRoutes } from "./externalRateLimitMetrics.routes.js";
 import { eventSubscriptionFilterRoutes } from "./eventSubscriptionFilter.routes.js";
+import { archivedDataBrowserRoutes } from "./archivedDataBrowser.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -99,4 +100,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(eventSubscriptionFilterRoutes, {
     prefix: "/api/v1/event-subscriptions",
   });
+  server.register(archivedDataBrowserRoutes, { prefix: "/api/v1/archive" });
 }
