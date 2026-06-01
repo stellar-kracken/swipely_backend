@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { configService, ConfigValue } from "../../services/config.service";
+import { featureFlagAuditService } from "../../services/featureFlagAudit.service.js";
 
 export async function configRoutes(server: FastifyInstance) {
   server.get(
@@ -133,6 +134,63 @@ export async function configRoutes(server: FastifyInstance) {
     },
   );
 
+  server.get<{
+    Querystring: {
+      flagName?: string;
+      environment?: string;
+      changedBy?: string;
+      action?: "create" | "update" | "delete";
+      search?: string;
+      limit?: number;
+      offset?: number;
+    };
+  }>(
+    "/features/audit",
+    {
+      schema: {
+        tags: ["Config"],
+        summary: "Get feature flag change audit history",
+        querystring: {
+          type: "object",
+          properties: {
+            flagName: { type: "string" },
+            environment: { type: "string" },
+            changedBy: { type: "string" },
+            action: { type: "string", enum: ["create", "update", "delete"] },
+            search: { type: "string" },
+            limit: { type: "integer", minimum: 1, maximum: 500 },
+            offset: { type: "integer", minimum: 0 },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const result = await featureFlagAuditService.search(request.query);
+      return result;
+    },
+  );
+
+  server.get<{
+    Querystring: {
+      flagName?: string;
+      environment?: string;
+      changedBy?: string;
+      search?: string;
+    };
+  }>(
+    "/features/audit/export",
+    {
+      schema: {
+        tags: ["Config"],
+        summary: "Export feature flag audit history",
+      },
+    },
+    async (request) => {
+      const entries = await featureFlagAuditService.export(request.query);
+      return { entries, exportedAt: new Date().toISOString() };
+    },
+  );
+
   server.get<{ Params: { name: string } }>(
     "/features/:name",
     {
@@ -169,6 +227,8 @@ export async function configRoutes(server: FastifyInstance) {
       environment?: string;
       rolloutPercentage?: number;
       conditions?: Record<string, unknown>;
+      changedBy?: string;
+      changeReason?: string;
     };
   }>(
     "/features",
@@ -185,6 +245,8 @@ export async function configRoutes(server: FastifyInstance) {
             environment: { type: "string" },
             rolloutPercentage: { type: "number", minimum: 0, maximum: 100 },
             conditions: { type: "object", additionalProperties: true },
+            changedBy: { type: "string" },
+            changeReason: { type: "string" },
           },
         },
         response: {
@@ -196,8 +258,15 @@ export async function configRoutes(server: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { name, enabled, environment, rolloutPercentage, conditions } = request.body;
-      await configService.setFeatureFlag(name, enabled, { environment, rolloutPercentage, conditions });
+      const { name, enabled, environment, rolloutPercentage, conditions, changedBy, changeReason } =
+        request.body;
+      await configService.setFeatureFlag(name, enabled, {
+        environment,
+        rolloutPercentage,
+        conditions,
+        changedBy,
+        changeReason,
+      });
       return reply.code(201).send({ message: "Feature flag set successfully" });
     },
   );

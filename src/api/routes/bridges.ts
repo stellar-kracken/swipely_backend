@@ -1,10 +1,35 @@
 import type { FastifyInstance } from "fastify";
 import { BridgeService } from "../../services/bridge.service.js";
 import { BridgeTransactionService } from "../../services/bridgeTransaction.service.js";
+import { bridgeHealthSnapshotService } from "../../services/bridgeHealthSnapshot.service.js";
 
 export async function bridgesRoutes(server: FastifyInstance) {
   const bridgeService = new BridgeService();
   const bridgeTransactionService = new BridgeTransactionService();
+
+  server.get<{ Querystring: { bypassCache?: boolean } }>(
+    "/snapshot",
+    {
+      schema: {
+        tags: ["Bridges"],
+        summary: "Bridge health snapshot with trend summary",
+        description:
+          "Returns current bridge health status, asset coverage, and 24h trend. Response is cached for 30 seconds.",
+        querystring: {
+          type: "object",
+          properties: { bypassCache: { type: "boolean", default: false } },
+        },
+        response: {
+          200: { type: "object", additionalProperties: true },
+        },
+      },
+    },
+    async (request) => {
+      return bridgeHealthSnapshotService.getSnapshot({
+        bypassCache: request.query.bypassCache,
+      });
+    },
+  );
 
   server.get(
     "/",
