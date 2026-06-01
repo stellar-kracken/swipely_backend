@@ -52,6 +52,7 @@ import { eventSubscriptionFilterRoutes } from "./eventSubscriptionFilter.routes.
 import { maintenanceRoutes } from "./maintenance.js";
 import { notificationTemplatesRoutes } from "./notificationTemplates.js";
 import { archivedDataBrowserRoutes } from "./archivedDataBrowser.routes.js";
+import { circuitHealthRoutes } from "./circuitHealth.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -61,6 +62,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(alertHistoryRoutes, { prefix: "/api/v1/alerts/search" });
   server.register(exportsRoutes, { prefix: "/api/v1/exports" });
   server.register(circuitBreakerRoutes, { prefix: "/api/v1/circuit-breaker" });
+  server.register(circuitHealthRoutes, { prefix: "/api/v1/circuit-health" });
   server.register(preferencesRoutes, { prefix: "/api/v1/preferences" });
   server.register(apiKeysRoutes, { prefix: "/api/v1/admin/api-keys" });
   server.register(jobsRoutes, { prefix: "/api/v1/jobs" });
