@@ -60,6 +60,8 @@ import { assetMergeRoutes } from "./assetMerge.routes.js";
 import { alertWindowingRoutes } from "./alertWindowing.routes.js";
 import { queryPresetsRoutes } from "./queryPresets.js";
 import { duplicateAlertCheckRoutes } from "./duplicateAlertCheck.routes.js";
+import { freshnessRoutes } from "./freshness.js";
+
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -134,6 +136,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(externalRateLimitMetricsRoutes, {
     prefix: "/api/v1/metrics/external-rate-limits",
   });
+  server.register(freshnessRoutes, { prefix: "/api/v1/freshness" });
   server.register(eventSubscriptionFilterRoutes, {
     prefix: "/api/v1/event-subscriptions",
   });

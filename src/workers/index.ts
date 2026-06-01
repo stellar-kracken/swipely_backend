@@ -9,6 +9,7 @@ import { processDigestScheduler } from "./digestScheduler.worker.js";
 import { processMetadataSync } from "./metadataSync.job.js";
 import { processExternalDependencyMonitor } from "./externalDependencyMonitor.job.js";
 import { processReconciliation } from "./reconciliation.job.js";
+import { processStalenessDetection } from "./stalenessDetection.job.js";
 import { logger } from "../utils/logger.js";
 import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
 import { runAuditRetentionJob } from "../jobs/auditRetention.job.js";
@@ -58,6 +59,9 @@ export async function initJobSystem() {
         break;
       case "external-dependency-monitor":
         await processExternalDependencyMonitor(job);
+        break;
+      case "staleness-detection":
+        await processStalenessDetection(job);
         break;
       case "reconciliation":
         await processReconciliation(job as any);
@@ -130,6 +134,8 @@ export async function initJobSystem() {
 
   // External dependency checks: every 2 minutes
   await jobQueue.addRepeatableJob("external-dependency-monitor", {}, "*/2 * * * *");
+  // Staleness detection: every 5 minutes
+  await jobQueue.addRepeatableJob("staleness-detection", {}, "*/5 * * * *");
   // reconciliation: per-asset, every hour (top of hour)
   // Note: This uses the queue helper for retry/backoff defaults.
   for (const assetCode of ["USDC", "EURC"]) {
