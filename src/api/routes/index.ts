@@ -47,6 +47,7 @@ import { externalRateLimitMetricsRoutes } from "./externalRateLimitMetrics.route
 import { eventSubscriptionFilterRoutes } from "./eventSubscriptionFilter.routes.js";
 import { maintenanceRoutes } from "./maintenance.js";
 import { notificationTemplatesRoutes } from "./notificationTemplates.js";
+import { archivedDataBrowserRoutes } from "./archivedDataBrowser.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -119,4 +120,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(notificationTemplatesRoutes, {
     prefix: "/api/v1/notification-templates",
   });
+  server.register(archivedDataBrowserRoutes, { prefix: "/api/v1/archive" });
 }
