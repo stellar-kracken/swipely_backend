@@ -34,6 +34,7 @@ import { alertRulesRoutes } from "./alertRules.js";
 import { auditRoutes } from "./audit.js";
 import { bridgeRegistryRoutes } from "./bridge-registry.routes.js";
 import { incidentRoutes } from "./incidents.routes.js";
+import { incidentTimelineRoutes } from "./incidentTimeline.routes.js";
 import { healthScoreHistoryRoutes } from "./healthScoreHistory.routes.js";
 import { horizonStreamRoutes } from "./horizonStream.routes.js";
 import { adminRotationRoutes } from "./adminRotation.js";
@@ -41,6 +42,8 @@ import { digestSchedulerRoutes } from "./digestScheduler.js";
 import { alertSuppressionRoutes } from "./alertSuppression.js";
 import { externalDependenciesRoutes } from "./externalDependencies.routes.js";
 import { providerHealthRegistryRoutes } from "./providerHealthRegistry.routes.js";
+import { sourceHealthRoutes } from "./sourceHealth.routes.js";
+import { accessOverviewRoutes } from "./accessOverview.routes.js";
 import { reconciliationRoutes } from "./reconciliation.js";
 import { statusSubscriptionsRoutes } from "./statusSubscriptions.js";
 import { sessionsRoutes } from "./sessions.js";
@@ -92,6 +95,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(auditRoutes, { prefix: "/api/v1/admin/audit" });
   server.register(bridgeRegistryRoutes, { prefix: "/api/v1/bridge-registry" });
   server.register(incidentRoutes, { prefix: "/api/v1/incidents" });
+  server.register(incidentTimelineRoutes, { prefix: "/api/v1/incidents" });
   server.register(healthScoreHistoryRoutes, {
     prefix: "/api/v1/health-score-history",
   });
@@ -107,6 +111,8 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(providerHealthRegistryRoutes, {
     prefix: "/api/v1/providers/health",
   });
+  server.register(sourceHealthRoutes, { prefix: "/api/v1/sources/health" });
+  server.register(accessOverviewRoutes, { prefix: "/api/v1/admin/access-overview" });
   server.register(reconciliationRoutes, { prefix: "/api/v1/reconciliation" });
   server.register(statusSubscriptionsRoutes, {
     prefix: "/api/v1/status-subscriptions",
