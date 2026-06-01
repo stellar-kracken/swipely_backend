@@ -1,7 +1,10 @@
+import { logger } from "../../utils/logger.js";
+import { providerAllowlistService } from "../providerAllowlist.service.js";
 import type { MetadataSourceAdapter, MetadataSourcePayload, MetadataSyncContext } from "./assetMetadataSync.types.js";
 
 const STELLAR_EXPERT_BASE_URL = "https://api.stellar.expert/explorer/public/asset";
 const TIMEOUT_MS = 8000;
+const PROVIDER_KEY = "stellar-expert";
 
 interface StellarExpertAssetResponse {
   _embedded?: {
@@ -36,6 +39,12 @@ export class StellarExpertMetadataSource implements MetadataSourceAdapter {
   async fetch(context: MetadataSyncContext): Promise<MetadataSourcePayload | null> {
     const symbol = context.symbol.toUpperCase();
     if (symbol === "XLM") {
+      return null;
+    }
+
+    const allowed = await providerAllowlistService.isAllowed(PROVIDER_KEY);
+    if (!allowed) {
+      logger.info({ providerKey: PROVIDER_KEY }, "Provider disabled by allowlist");
       return null;
     }
 

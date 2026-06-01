@@ -13,6 +13,7 @@
 import { redis } from "../../utils/redis.js";
 import { logger } from "../../utils/logger.js";
 import { withRetry } from "../../utils/retry.js";
+import { providerAllowlistService } from "../providerAllowlist.service.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -22,6 +23,10 @@ const SOURCE_NAME = "DEX";
 const CACHE_PREFIX = "dex:price:";
 const CACHE_TTL_SEC = 30;
 const TIMEOUT_MS = 6_000;
+
+const PROVIDER_STELLAR_HORIZON = "stellar-horizon";
+const PROVIDER_JUPITER = "jupiter";
+const PROVIDER_ONEINCH = "1inch";
 
 const STELLAR_HORIZON = "https://horizon.stellar.org";
 const JUPITER_PRICE_URL = "https://price.jup.ag/v6/price";
@@ -147,10 +152,32 @@ export class DexSource {
       logger.warn({ err }, "DEX cache read error");
     }
 
+    const [allowStellar, allowJupiter, allowOneInch] = await Promise.all([
+      providerAllowlistService.isAllowed(PROVIDER_STELLAR_HORIZON),
+      providerAllowlistService.isAllowed(PROVIDER_JUPITER),
+      providerAllowlistService.isAllowed(PROVIDER_ONEINCH),
+    ]);
+
+    if (!allowStellar) {
+      logger.info({ providerKey: PROVIDER_STELLAR_HORIZON }, "Provider disabled by allowlist");
+    }
+    if (!allowJupiter) {
+      logger.info({ providerKey: PROVIDER_JUPITER }, "Provider disabled by allowlist");
+    }
+    if (!allowOneInch) {
+      logger.info({ providerKey: PROVIDER_ONEINCH }, "Provider disabled by allowlist");
+    }
+
     const [stellarPrices, jupiterPrices, oneinchPrices] = await Promise.allSettled([
-      this.fetchStellarPrices(upper.filter((s) => s in STELLAR_ASSETS)),
-      this.fetchJupiterPrices(upper.filter((s) => s in JUPITER_MINTS)),
-      this.fetchOneInchPrices(upper.filter((s) => s in ONEINCH_CONTRACTS)),
+      allowStellar
+        ? this.fetchStellarPrices(upper.filter((s) => s in STELLAR_ASSETS))
+        : Promise.resolve([]),
+      allowJupiter
+        ? this.fetchJupiterPrices(upper.filter((s) => s in JUPITER_MINTS))
+        : Promise.resolve([]),
+      allowOneInch
+        ? this.fetchOneInchPrices(upper.filter((s) => s in ONEINCH_CONTRACTS))
+        : Promise.resolve([]),
     ]);
 
     const results: DexPriceResult[] = [

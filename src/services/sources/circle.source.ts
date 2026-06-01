@@ -18,6 +18,7 @@ import { config } from "../../config/index.js";
 import { withRetry } from "../../utils/retry.js";
 import { PriceFetchError } from "../price.service.js";
 import { schemaDriftService } from "../schemaDrift.service.js";
+import { providerAllowlistService } from "../providerAllowlist.service.js";
 
 // ---------------------------------------------------------------------------
 // Circle API response shapes
@@ -63,6 +64,7 @@ export interface CirclePriceResult {
 const SOURCE_NAME = "Circle";
 const CACHE_PREFIX = "circle:price:";
 const RATE_LIMIT_REDIS_KEY = "circle:rl:count";
+const PROVIDER_KEY = "circle";
 
 /** Symbols this source can serve */
 const SUPPORTED_SYMBOLS = new Set(["USDC", "EURC"]);
@@ -181,6 +183,15 @@ export class CircleSource {
     if (!SUPPORTED_SYMBOLS.has(upper)) {
       throw new PriceFetchError(
         `Circle source does not support ${symbol}`,
+        SOURCE_NAME,
+        symbol
+      );
+    }
+
+    const allowed = await providerAllowlistService.isAllowed(PROVIDER_KEY);
+    if (!allowed) {
+      throw new PriceFetchError(
+        "Circle source disabled by allowlist",
         SOURCE_NAME,
         symbol
       );

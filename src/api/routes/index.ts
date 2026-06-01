@@ -61,7 +61,8 @@ import { alertWindowingRoutes } from "./alertWindowing.routes.js";
 import { queryPresetsRoutes } from "./queryPresets.js";
 import { duplicateAlertCheckRoutes } from "./duplicateAlertCheck.routes.js";
 import { freshnessRoutes } from "./freshness.js";
-
+import { providerAllowlistRoutes } from "./providerAllowlist.routes.js";
+import { providerAllowlistAdminRoutes } from "./providerAllowlistAdmin.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -153,4 +154,10 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(alertWindowingRoutes, { prefix: "/api/v1/alert-windowing" });
   server.register(queryPresetsRoutes, { prefix: "/api/v1/query-presets" });
   server.register(duplicateAlertCheckRoutes, { prefix: "/api/v1/duplicate-alert-check" });
+  server.register(providerAllowlistRoutes, {
+    prefix: "/api/v1/providers/allowlist",
+  });
+  server.register(providerAllowlistAdminRoutes, {
+    prefix: "/api/v1/admin/providers/allowlist",
+  });
 }
