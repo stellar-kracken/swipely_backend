@@ -43,6 +43,8 @@ import { digestSchedulerRoutes } from "./digestScheduler.js";
 import { alertSuppressionRoutes } from "./alertSuppression.js";
 import { externalDependenciesRoutes } from "./externalDependencies.routes.js";
 import { providerHealthRegistryRoutes } from "./providerHealthRegistry.routes.js";
+import { sourceHealthRoutes } from "./sourceHealth.routes.js";
+import { accessOverviewRoutes } from "./accessOverview.routes.js";
 import { reconciliationRoutes } from "./reconciliation.js";
 import { statusSubscriptionsRoutes } from "./statusSubscriptions.js";
 import { sessionsRoutes } from "./sessions.js";
@@ -113,6 +115,8 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(providerHealthRegistryRoutes, {
     prefix: "/api/v1/providers/health",
   });
+  server.register(sourceHealthRoutes, { prefix: "/api/v1/sources/health" });
+  server.register(accessOverviewRoutes, { prefix: "/api/v1/admin/access-overview" });
   server.register(reconciliationRoutes, { prefix: "/api/v1/reconciliation" });
   server.register(statusSubscriptionsRoutes, {
     prefix: "/api/v1/status-subscriptions",
