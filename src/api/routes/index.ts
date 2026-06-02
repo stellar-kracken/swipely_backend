@@ -34,7 +34,8 @@ import { alertRulesRoutes } from "./alertRules.js";
 import { auditRoutes } from "./audit.js";
 import { bridgeRegistryRoutes } from "./bridge-registry.routes.js";
 import { incidentRoutes } from "./incidents.routes.js";
-import { incidentTimelineRoutes } from "./incidentTimeline.routes.js";
+import { incidentCorrelationRoutes } from "./incidentCorrelation.routes.js";
+import { usageMetricsRoutes } from "./usageMetrics.routes.js";
 import { healthScoreHistoryRoutes } from "./healthScoreHistory.routes.js";
 import { horizonStreamRoutes } from "./horizonStream.routes.js";
 import { adminRotationRoutes } from "./adminRotation.js";
@@ -53,6 +54,10 @@ import { maintenanceRoutes } from "./maintenance.js";
 import { notificationTemplatesRoutes } from "./notificationTemplates.js";
 import { archivedDataBrowserRoutes } from "./archivedDataBrowser.routes.js";
 import { circuitHealthRoutes } from "./circuitHealth.js";
+import { ruleEvaluatorRoutes } from "./ruleEvaluator.routes.js";
+import { serviceAnnotationRoutes } from "./serviceAnnotation.routes.js";
+import { assetMergeRoutes } from "./assetMerge.routes.js";
+import { alertWindowingRoutes } from "./alertWindowing.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -97,7 +102,10 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(auditRoutes, { prefix: "/api/v1/admin/audit" });
   server.register(bridgeRegistryRoutes, { prefix: "/api/v1/bridge-registry" });
   server.register(incidentRoutes, { prefix: "/api/v1/incidents" });
-  server.register(incidentTimelineRoutes, { prefix: "/api/v1/incidents" });
+  // Incident correlation endpoints (suggestions, manual link/unlink, approve)
+  server.register(incidentCorrelationRoutes, { prefix: "/api/v1/incidents" });
+  // Usage metrics admin endpoints
+  server.register(usageMetricsRoutes, { prefix: "/api/v1" });
   server.register(healthScoreHistoryRoutes, {
     prefix: "/api/v1/health-score-history",
   });
@@ -130,4 +138,8 @@ export async function registerRoutes(server: FastifyInstance) {
     prefix: "/api/v1/notification-templates",
   });
   server.register(archivedDataBrowserRoutes, { prefix: "/api/v1/archive" });
+  server.register(ruleEvaluatorRoutes, { prefix: "/api/v1/rule-evaluator" });
+  server.register(serviceAnnotationRoutes, { prefix: "/api/v1/service-annotations" });
+  server.register(assetMergeRoutes, { prefix: "/api/v1/asset-merge" });
+  server.register(alertWindowingRoutes, { prefix: "/api/v1/alert-windowing" });
 }
