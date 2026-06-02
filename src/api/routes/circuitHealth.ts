@@ -353,7 +353,7 @@ export async function circuitHealthRoutes(fastify: FastifyInstance) {
   // ──────────────────────────────────────────────────────────────────────────────
 
   fastify.addSchema({
-    $id: "CircuitState#",
+    $id: "CircuitState",
     type: "object",
     properties: {
       scope: {
@@ -407,7 +407,7 @@ export async function circuitHealthRoutes(fastify: FastifyInstance) {
   });
 
   fastify.addSchema({
-    $id: "CircuitTransition#",
+    $id: "CircuitTransition",
     type: "object",
     properties: {
       id: {
@@ -449,7 +449,7 @@ export async function circuitHealthRoutes(fastify: FastifyInstance) {
   });
 
   fastify.addSchema({
-    $id: "ManualOverride#",
+    $id: "ManualOverride",
     type: "object",
     properties: {
       id: {

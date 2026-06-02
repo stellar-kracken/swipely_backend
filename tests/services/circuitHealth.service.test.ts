@@ -1,22 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CircuitHealthService } from "../../src/services/circuitHealth.service.js";
 
+// Shared query builder mock for chained knex calls
+function mockQueryBuilder() {
+  const resolveValue: any[] = [];
+  const qb = {
+    then: (resolve: (value: any) => void) => resolve(resolveValue),
+    catch: (reject: (err: any) => void) => reject(new Error()),
+    where: vi.fn(() => qb),
+    whereIn: vi.fn(() => qb),
+    modify: vi.fn((cb: (b: typeof qb) => void) => { cb(qb); return qb; }),
+    orderBy: vi.fn(() => qb),
+    limit: vi.fn(() => qb),
+    first: vi.fn(() => Promise.resolve(null)),
+  };
+  return qb;
+}
+
 // Hoisted mocks
 const mocks = vi.hoisted(() => ({
-  db: {
-    circuit_breaker_pauses: {
-      where: vi.fn().mockReturnThis(),
-      whereIn: vi.fn().mockReturnThis(),
-      modify: vi.fn().mockReturnThis(),
-      orderBy: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      first: vi.fn(),
-    },
-    circuit_breaker_whitelist: {
-      where: vi.fn().mockReturnThis(),
-      orderBy: vi.fn().mockReturnThis(),
-    },
-  },
+  query: mockQueryBuilder(),
   redis: {
     get: vi.fn(),
     setex: vi.fn(),
@@ -31,8 +34,9 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+// getDatabase returns a function (knex) that returns the query builder
 vi.mock("../../src/database/connection.js", () => ({
-  getDatabase: vi.fn(() => mocks.db),
+  getDatabase: vi.fn(() => vi.fn(() => mocks.query)),
 }));
 
 vi.mock("../../src/utils/redis.js", () => ({
@@ -52,6 +56,7 @@ describe("CircuitHealthService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.query = mockQueryBuilder();
     service = new CircuitHealthService();
   });
 
@@ -62,8 +67,6 @@ describe("CircuitHealthService", () => {
   describe("getCircuitHealth", () => {
     it("should return full circuit health when no scope is specified", async () => {
       mocks.redis.get.mockResolvedValue(null);
-      mocks.db.circuit_breaker_pauses.where.mockResolvedValue([]);
-      mocks.db.circuit_breaker_whitelist.where.mockResolvedValue([]);
 
       const health = await service.getCircuitHealth();
 
@@ -80,7 +83,7 @@ describe("CircuitHealthService", () => {
 
     it("should return specific circuit state when scope is provided", async () => {
       mocks.redis.get.mockResolvedValue(null);
-      mocks.db.circuit_breaker_pauses.where.mockResolvedValue(null);
+      mocks.query.first.mockResolvedValue(null);
 
       const state = await service.getCircuitHealth({
         scope: "bridge",
@@ -125,7 +128,8 @@ describe("CircuitHealthService", () => {
         },
       ];
 
-      mocks.db.circuit_breaker_pauses.where.mockResolvedValue(mockTransitions);
+      mocks.query.orderBy.mockReturnThis();
+      mocks.query.limit.mockResolvedValue(mockTransitions);
 
       const transitions = await service.getRecentTransitions();
 
@@ -134,11 +138,9 @@ describe("CircuitHealthService", () => {
     });
 
     it("should filter transitions by scope", async () => {
-      mocks.db.circuit_breaker_pauses.where.mockResolvedValue([]);
-
       await service.getRecentTransitions(50, "bridge", "test-bridge");
 
-      expect(mocks.db.circuit_breaker_pauses.where).toHaveBeenCalled();
+      expect(mocks.query.where).toHaveBeenCalledWith("pause_scope", 1);
     });
   });
 
@@ -177,7 +179,7 @@ describe("CircuitHealthService", () => {
   describe("whitelist operations", () => {
     it("should check if item is whitelisted", async () => {
       mocks.redis.get.mockResolvedValue(null);
-      mocks.db.circuit_breaker_whitelist.where.mockResolvedValue([]);
+      mocks.query.first.mockResolvedValue(null);
 
       const isWhitelisted = await service.isWhitelisted("address", "0xTest");
 
@@ -195,7 +197,8 @@ describe("CircuitHealthService", () => {
         },
       ];
 
-      mocks.db.circuit_breaker_whitelist.where.mockResolvedValue(mockWhitelist);
+      mocks.query.where.mockReturnThis();
+      mocks.query.orderBy.mockResolvedValue(mockWhitelist);
       mocks.redis.get.mockResolvedValue(null);
 
       const list = await service.getWhitelistByType("address");
@@ -208,7 +211,7 @@ describe("CircuitHealthService", () => {
   describe("circuit state formatting", () => {
     it("should format circuit states correctly", async () => {
       mocks.redis.get.mockResolvedValue(null);
-      mocks.db.circuit_breaker_pauses.where.mockResolvedValue(null);
+      mocks.query.first.mockResolvedValue(null);
 
       const state = await service.getCircuitHealth({
         scope: "global",
