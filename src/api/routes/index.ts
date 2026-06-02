@@ -58,6 +58,7 @@ import { serviceAnnotationRoutes } from "./serviceAnnotation.routes.js";
 import { assetMergeRoutes } from "./assetMerge.routes.js";
 import { alertWindowingRoutes } from "./alertWindowing.routes.js";
 import { queryPresetsRoutes } from "./queryPresets.js";
+import { duplicateAlertCheckRoutes } from "./duplicateAlertCheck.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -146,4 +147,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(assetMergeRoutes, { prefix: "/api/v1/asset-merge" });
   server.register(alertWindowingRoutes, { prefix: "/api/v1/alert-windowing" });
   server.register(queryPresetsRoutes, { prefix: "/api/v1/query-presets" });
+  server.register(duplicateAlertCheckRoutes, { prefix: "/api/v1/duplicate-alert-check" });
 }

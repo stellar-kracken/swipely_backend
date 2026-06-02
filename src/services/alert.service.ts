@@ -7,6 +7,7 @@ import {
   alertSuppressionService,
   type AlertSuppressionService,
 } from "./alertSuppression.service.js";
+import { duplicateAlertCheckService } from "./duplicateAlertCheck.service.js";
 
 export type AlertType =
   | "price_deviation"
@@ -322,7 +323,7 @@ export class AlertService {
           continue;
         }
 
-        const event: AlertEvent = {
+        const candidateEvent = {
           eventId: "",
           ruleId: rule.id,
           assetCode: snapshot.assetCode,
@@ -333,7 +334,7 @@ export class AlertService {
           metric,
           webhookDelivered: false,
           onChainEventId: null,
-          lifecycleState: "open",
+          lifecycleState: "open" as const,
           acknowledgedAt: null,
           acknowledgedBy: null,
           assignedAt: null,
@@ -345,7 +346,29 @@ export class AlertService {
           time: now,
         };
 
+        const dedupResult = duplicateAlertCheckService.check(candidateEvent);
+        if (dedupResult.action === "block") {
+          logger.info(
+            { ruleId: rule.id, matchedEventId: dedupResult.matchedEventId, reason: dedupResult.reason },
+            "Alert blocked as duplicate"
+          );
+          continue;
+        }
+        if (dedupResult.action === "review") {
+          logger.info(
+            { ruleId: rule.id, matchedEventId: dedupResult.matchedEventId, reason: dedupResult.reason },
+            "Alert queued for duplicate review"
+          );
+          continue;
+        }
+
+        const event: AlertEvent = {
+          ...candidateEvent,
+          priority: dedupResult.escalatedPriority ?? candidateEvent.priority,
+        };
+
         await this.persistEvent(event);
+        duplicateAlertCheckService.record(event);
         await this.markRuleTriggered(rule.id, now);
         triggered.push(event);
 
