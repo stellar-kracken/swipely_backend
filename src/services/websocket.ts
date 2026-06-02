@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 
 const MAX_HISTORY_PER_TOPIC = 50;
+const MAX_HISTORY_AGE_MS = 5 * 60 * 1000;
 const BATCH_INTERVAL_MS = 120;
 const MAX_BATCH_SIZE = 20;
 const MESSAGE_RATE_LIMIT_WINDOW_MS = 1000;
@@ -19,11 +20,13 @@ export type WebsocketMessagePriority = "critical" | "high" | "medium" | "low";
 
 export interface WebsocketBroadcastMessage {
   id: string;
+  sequence: number;
   type: WebsocketMessageType;
   topic: string;
   priority: WebsocketMessagePriority;
   payload: unknown;
   timestamp: string;
+  expiresAt: string;
   ackRequired: boolean;
 }
 
@@ -45,6 +48,15 @@ export interface WebsocketClientInfo {
   subscriptions: string[];
   filters: Record<string, Record<string, unknown>>;
   presence: "online" | "offline";
+}
+
+export interface WebsocketReplayMetrics {
+  totalStored: number;
+  totalExpired: number;
+  replayRequests: number;
+  replayMessagesDelivered: number;
+  sequenceHighWatermark: number;
+  topicSizes: Record<string, number>;
 }
 
 interface SocketConnection {
@@ -84,6 +96,12 @@ export class WebsocketService {
   private clients = new Map<string, ClientState>();
   private topicSubscribers = new Map<string, Set<string>>();
   private history = new Map<string, WebsocketBroadcastMessage[]>();
+  private sequenceCounter = 0;
+  private replayMetrics = {
+    totalExpired: 0,
+    replayRequests: 0,
+    replayMessagesDelivered: 0,
+  };
   private queue: QueuedMessage[] = [];
   private batchTimer: ReturnType<typeof setInterval>;
 
@@ -197,13 +215,18 @@ export class WebsocketService {
     payload: unknown,
     options: WebsocketPublishOptions = {},
   ): void {
+    const timestamp = options.timestamp ?? new Date().toISOString();
+    const createdAtMs = Date.parse(timestamp);
+    const expiresAtMs = (Number.isFinite(createdAtMs) ? createdAtMs : Date.now()) + MAX_HISTORY_AGE_MS;
     const message: WebsocketBroadcastMessage = {
       id: randomUUID(),
+      sequence: ++this.sequenceCounter,
       type,
       topic,
       priority: options.priority ?? "medium",
       payload,
-      timestamp: options.timestamp ?? new Date().toISOString(),
+      timestamp,
+      expiresAt: new Date(expiresAtMs).toISOString(),
       ackRequired: options.ackRequired ?? false,
     };
 
@@ -239,6 +262,60 @@ export class WebsocketService {
       filters: Object.fromEntries(client.filters),
       presence: client.presence,
     }));
+  }
+
+  public getReplayMessages(
+    topics: string[] = [],
+    options: {
+      limit?: number;
+      sinceSequence?: number;
+    } = {}
+  ): WebsocketBroadcastMessage[] {
+    const replayTopics = topics.length > 0 ? topics : ["*"];
+    const limit = Math.min(Math.max(options.limit ?? MAX_BATCH_SIZE, 1), MAX_HISTORY_PER_TOPIC);
+    const sinceSequence = options.sinceSequence ?? 0;
+
+    const replayMessages: WebsocketBroadcastMessage[] = [];
+    for (const [topic, history] of this.history.entries()) {
+      this.pruneExpired(topic, history);
+      if (!replayTopics.some((subscription) => this.topicMatches(subscription, topic))) {
+        continue;
+      }
+
+      for (const message of this.history.get(topic) ?? []) {
+        if (message.sequence > sinceSequence) {
+          replayMessages.push(message);
+        }
+      }
+    }
+
+    replayMessages.sort((left, right) => left.sequence - right.sequence);
+    this.replayMetrics.replayRequests += 1;
+
+    const sliced = replayMessages.slice(-limit);
+    this.replayMetrics.replayMessagesDelivered += sliced.length;
+    return sliced;
+  }
+
+  public getReplayMetrics(): WebsocketReplayMetrics {
+    const topicSizes: Record<string, number> = {};
+    let totalStored = 0;
+
+    for (const [topic, history] of this.history.entries()) {
+      this.pruneExpired(topic, history);
+      const size = this.history.get(topic)?.length ?? 0;
+      topicSizes[topic] = size;
+      totalStored += size;
+    }
+
+    return {
+      totalStored,
+      totalExpired: this.replayMetrics.totalExpired,
+      replayRequests: this.replayMetrics.replayRequests,
+      replayMessagesDelivered: this.replayMetrics.replayMessagesDelivered,
+      sequenceHighWatermark: this.sequenceCounter,
+      topicSizes,
+    };
   }
 
   private enqueue(message: WebsocketBroadcastMessage): void {
@@ -366,6 +443,7 @@ export class WebsocketService {
   private recordHistory(message: WebsocketBroadcastMessage): void {
     const history = this.history.get(message.topic) ?? [];
     history.push(message);
+    this.pruneExpired(message.topic, history);
     while (history.length > MAX_HISTORY_PER_TOPIC) {
       history.shift();
     }
@@ -377,13 +455,7 @@ export class WebsocketService {
     if (!client || client.presence !== "online" || !client.socket) return;
 
     const replayTopics = topics.length > 0 ? topics : Array.from(client.subscriptions);
-    const replayMessages: WebsocketBroadcastMessage[] = [];
-
-    for (const [topic, history] of this.history.entries()) {
-      if (replayTopics.some((subscription) => this.topicMatches(subscription, topic))) {
-        replayMessages.push(...history);
-      }
-    }
+    const replayMessages = this.getReplayMessages(replayTopics, { limit: MAX_BATCH_SIZE });
 
     if (replayMessages.length === 0) {
       return;
@@ -393,6 +465,22 @@ export class WebsocketService {
       type: "replay",
       messages: replayMessages.slice(-MAX_BATCH_SIZE),
     });
+  }
+
+  private pruneExpired(topic: string, history: WebsocketBroadcastMessage[]): void {
+    const now = Date.now();
+    const kept = history.filter((message) => Date.parse(message.expiresAt) > now);
+    const removed = history.length - kept.length;
+    if (removed > 0) {
+      this.replayMetrics.totalExpired += removed;
+    }
+
+    if (kept.length > 0) {
+      this.history.set(topic, kept);
+      return;
+    }
+
+    this.history.delete(topic);
   }
 
   private sendMessage(connection: SocketConnection, payload: unknown): void {

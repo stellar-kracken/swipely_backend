@@ -34,6 +34,8 @@ import { alertRulesRoutes } from "./alertRules.js";
 import { auditRoutes } from "./audit.js";
 import { bridgeRegistryRoutes } from "./bridge-registry.routes.js";
 import { incidentRoutes } from "./incidents.routes.js";
+import { incidentCorrelationRoutes } from "./incidentCorrelation.routes.js";
+import { usageMetricsRoutes } from "./usageMetrics.routes.js";
 import { healthScoreHistoryRoutes } from "./healthScoreHistory.routes.js";
 import { horizonStreamRoutes } from "./horizonStream.routes.js";
 import { adminRotationRoutes } from "./adminRotation.js";
@@ -41,10 +43,21 @@ import { digestSchedulerRoutes } from "./digestScheduler.js";
 import { alertSuppressionRoutes } from "./alertSuppression.js";
 import { externalDependenciesRoutes } from "./externalDependencies.routes.js";
 import { providerHealthRegistryRoutes } from "./providerHealthRegistry.routes.js";
+import { sourceHealthRoutes } from "./sourceHealth.routes.js";
+import { accessOverviewRoutes } from "./accessOverview.routes.js";
 import { reconciliationRoutes } from "./reconciliation.js";
 import { statusSubscriptionsRoutes } from "./statusSubscriptions.js";
+import { sessionsRoutes } from "./sessions.js";
 import { externalRateLimitMetricsRoutes } from "./externalRateLimitMetrics.routes.js";
 import { eventSubscriptionFilterRoutes } from "./eventSubscriptionFilter.routes.js";
+import { maintenanceRoutes } from "./maintenance.js";
+import { notificationTemplatesRoutes } from "./notificationTemplates.js";
+import { archivedDataBrowserRoutes } from "./archivedDataBrowser.routes.js";
+import { ruleEvaluatorRoutes } from "./ruleEvaluator.routes.js";
+import { serviceAnnotationRoutes } from "./serviceAnnotation.routes.js";
+import { assetMergeRoutes } from "./assetMerge.routes.js";
+import { alertWindowingRoutes } from "./alertWindowing.routes.js";
+import { queryPresetsRoutes } from "./queryPresets.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -69,8 +82,12 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(healthRoutes, { prefix: "/health" });
   server.register(rateLimitAdminRoutes, { prefix: "/api/v1/admin/rate-limit" });
   server.register(tracingAdminRoutes, { prefix: "/api/v1/admin/tracing" });
-  server.register(validationAdminRoutes, { prefix: "/api/v1/admin/validation" });
-  server.register(alertRoutingAdminRoutes, { prefix: "/api/v1/admin/alert-routing" });
+  server.register(validationAdminRoutes, {
+    prefix: "/api/v1/admin/validation",
+  });
+  server.register(alertRoutingAdminRoutes, {
+    prefix: "/api/v1/admin/alert-routing",
+  });
   server.register(metricsRoutes, { prefix: "/metrics" });
   server.register(priceFeedsRoutes, { prefix: "/api/v1/price-feeds" });
   server.register(supplyChainRoutes, { prefix: "/api/v1/supply-chain" });
@@ -84,19 +101,49 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(auditRoutes, { prefix: "/api/v1/admin/audit" });
   server.register(bridgeRegistryRoutes, { prefix: "/api/v1/bridge-registry" });
   server.register(incidentRoutes, { prefix: "/api/v1/incidents" });
-  server.register(healthScoreHistoryRoutes, { prefix: "/api/v1/health-score-history" });
+  // Incident correlation endpoints (suggestions, manual link/unlink, approve)
+  server.register(incidentCorrelationRoutes, { prefix: "/api/v1/incidents" });
+  // Usage metrics admin endpoints
+  server.register(usageMetricsRoutes, { prefix: "/api/v1" });
+  server.register(healthScoreHistoryRoutes, {
+    prefix: "/api/v1/health-score-history",
+  });
   server.register(horizonStreamRoutes, { prefix: "/api/v1/horizon-streams" });
   server.register(adminRotationRoutes, { prefix: "/api/v1/admin/rotation" });
   server.register(digestSchedulerRoutes, { prefix: "/api/v1/digest" });
-  server.register(alertSuppressionRoutes, { prefix: "/api/v1/alert-suppression" });
-  server.register(externalDependenciesRoutes, { prefix: "/api/v1/external-dependencies" });
-  server.register(providerHealthRegistryRoutes, { prefix: "/api/v1/providers/health" });
+  server.register(alertSuppressionRoutes, {
+    prefix: "/api/v1/alert-suppression",
+  });
+  server.register(externalDependenciesRoutes, {
+    prefix: "/api/v1/external-dependencies",
+  });
+  server.register(providerHealthRegistryRoutes, {
+    prefix: "/api/v1/providers/health",
+  });
+  server.register(sourceHealthRoutes, { prefix: "/api/v1/sources/health" });
+  server.register(accessOverviewRoutes, {
+    prefix: "/api/v1/admin/access-overview",
+  });
   server.register(reconciliationRoutes, { prefix: "/api/v1/reconciliation" });
-  server.register(statusSubscriptionsRoutes, { prefix: "/api/v1/status-subscriptions" });
+  server.register(statusSubscriptionsRoutes, {
+    prefix: "/api/v1/status-subscriptions",
+  });
   server.register(externalRateLimitMetricsRoutes, {
     prefix: "/api/v1/metrics/external-rate-limits",
   });
   server.register(eventSubscriptionFilterRoutes, {
     prefix: "/api/v1/event-subscriptions",
   });
+  server.register(maintenanceRoutes, { prefix: "/api/v1/maintenance" });
+  server.register(notificationTemplatesRoutes, {
+    prefix: "/api/v1/notification-templates",
+  });
+  server.register(archivedDataBrowserRoutes, { prefix: "/api/v1/archive" });
+  server.register(ruleEvaluatorRoutes, { prefix: "/api/v1/rule-evaluator" });
+  server.register(serviceAnnotationRoutes, {
+    prefix: "/api/v1/service-annotations",
+  });
+  server.register(assetMergeRoutes, { prefix: "/api/v1/asset-merge" });
+  server.register(alertWindowingRoutes, { prefix: "/api/v1/alert-windowing" });
+  server.register(queryPresetsRoutes, { prefix: "/api/v1/query-presets" });
 }

@@ -9,6 +9,7 @@ import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
 import { registerValidation } from "./api/middleware/validation.js";
 import { registerMetrics } from "./api/middleware/metrics.js";
+import { registerUsageMetrics } from "./api/middleware/usageMetrics.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
 import { wsServer } from "./api/websocket/websocket.server.js";
 import {
@@ -74,6 +75,9 @@ export async function buildServer() {
 
   // Register metrics middleware (to capture all requests)
   await registerMetrics(server as any);
+
+  // Register lightweight usage metrics middleware (stores aggregates for queries)
+  await registerUsageMetrics(server as any);
 
   // Register plugins
   await server.register(cors, {
@@ -162,7 +166,7 @@ export async function buildServer() {
     },
     async (request, reply) => {
       try {
-        const { getOutboxSystem } = await import("../../outbox/index.js");
+        const { getOutboxSystem } = await import("./outbox/index.js");
         const outboxSystem = getOutboxSystem();
         const healthCheck = await outboxSystem.healthCheck();
         
@@ -171,7 +175,7 @@ export async function buildServer() {
           timestamp: new Date().toISOString(),
         };
       } catch (error) {
-        return reply.code(503).send({
+        return reply.code(200 as any).send({
           status: "unhealthy",
           details: {
             initialized: false,

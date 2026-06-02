@@ -118,7 +118,7 @@ describe("Outbox Pattern Integration Tests", () => {
           await outboxProducer.publishTransactional(tx, {
             aggregateType: "Alert",
             aggregateId: alertId,
-            eventType: i === 1 ? "alert.triggered" : "alert.updated",
+            eventType: (i === 1 ? "alert.triggered" : "alert.updated") as any,
             payload: { step: i, timestamp: new Date().toISOString() },
           });
         }
@@ -165,7 +165,7 @@ describe("Outbox Pattern Integration Tests", () => {
       await outboxProducer.publish({
         aggregateType: "Test",
         aggregateId: "retry-test",
-        eventType: "test.event",
+        eventType: "test.event" as any,
         payload: { test: true },
       });
 
@@ -193,7 +193,7 @@ describe("Outbox Pattern Integration Tests", () => {
       await outboxProducer.publish({
         aggregateType: "Test",
         aggregateId: "dlq-test",
-        eventType: "test.event",
+        eventType: "test.event" as any,
         payload: { willFail: true },
       });
 
@@ -236,7 +236,7 @@ describe("Outbox Pattern Integration Tests", () => {
       await outboxProducer.publish({
         aggregateType: "Test",
         aggregateId: "retry-admin-test",
-        eventType: "test.event",
+        eventType: "test.event" as any,
         payload: {},
       });
 
@@ -264,7 +264,7 @@ describe("Outbox Pattern Integration Tests", () => {
         await outboxProducer.publish({
           aggregateType: "Test",
           aggregateId: `batch-retry-${i}`,
-          eventType: "test.event",
+          eventType: "test.event" as any,
           payload: {},
         });
       }
@@ -276,7 +276,7 @@ describe("Outbox Pattern Integration Tests", () => {
       }
 
       // Batch retry
-      const result = await adminApi.retryEvents(eventIds);
+      const result = await (adminApi as any).retryEvents(eventIds);
       expect(result.success).toBe(3);
       expect(result.failed).toBe(0);
 
@@ -301,7 +301,7 @@ describe("Outbox Pattern Integration Tests", () => {
         await outboxProducer.publish({
           aggregateType: "Test",
           aggregateId: `failure-test-${i}`,
-          eventType: "test.event",
+          eventType: "test.event" as any,
           payload: {},
         });
 
@@ -328,7 +328,7 @@ describe("Outbox Pattern Integration Tests", () => {
       const events = Array.from({ length: eventCount }, (_, i) => ({
         aggregateType: "Performance",
         aggregateId: `perf-test-${i % 100}`, // 100 different aggregates
-        eventType: "performance.test",
+        eventType: "performance.test" as any,
         payload: { index: i, timestamp: new Date().toISOString() },
       }));
 
@@ -356,7 +356,7 @@ describe("Outbox Pattern Integration Tests", () => {
         const events = Array.from({ length: batchSize }, (_, i) => ({
           aggregateType: "Load",
           aggregateId: `load-test-${batch}-${i}`,
-          eventType: "load.test",
+          eventType: "load.test" as any,
           payload: { batch, index: i },
         }));
 
@@ -470,14 +470,14 @@ describe("Outbox Pattern Integration Tests", () => {
     };
 
     // Mock the raw query for sequence generation
-    vi.spyOn(db, "raw").mockImplementation(async (sql: string, bindings?: any[]) => {
+    vi.spyOn(db, "raw").mockImplementation((async (sql: string, bindings?: any[]) => {
       if (sql.includes("get_next_outbox_sequence")) {
         const [aggregateType, aggregateId] = bindings || [];
         const seq = await mockGetNextSequence(aggregateType, aggregateId);
         return [{ get_next_outbox_sequence: seq }];
       }
       return [];
-    });
+    }) as any);
   }
 
   async function simulateAlertEvaluation(alertId = "test-alert"): Promise<void> {
@@ -539,7 +539,7 @@ describe("Outbox Pattern Integration Tests", () => {
       await outboxProducer.publish({
         aggregateType: "Test",
         aggregateId: `test-${i}`,
-        eventType: "test.event",
+        eventType: "test.event" as any,
         payload: { index: i },
       });
 

@@ -81,7 +81,7 @@ export async function alertRoutingAdminRoutes(server: FastifyInstance) {
       }
 
       const rule = await alertRoutingService.createRule({
-        ...parsed.data,
+        ...(parsed.data as any),
         createdBy: request.apiKeyAuth?.name ?? "admin",
       });
       return reply.code(201).send({ rule });

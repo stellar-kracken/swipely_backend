@@ -70,7 +70,7 @@ describe("ConfigService", () => {
       const mockConfig = {
         id: 1,
         environment: "prod-us-east",
-        key: "MAX_RETRIES",
+        key: "MAX_RETRIES" as any,
         value: 5,
         encrypted: false,
         validated: true,
@@ -80,12 +80,12 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.where).mockReturnThis();
       vi.mocked(mockDb.first).mockResolvedValue(mockConfig);
 
-      const result = await configService.get("MAX_RETRIES", "prod-us-east");
+      const result = await configService.get("MAX_RETRIES" as any, "prod-us-east");
 
       expect(result).toBe(5);
       expect(mockDb.where).toHaveBeenCalledWith({
         environment: "prod-us-east",
-        key: "MAX_RETRIES",
+        key: "MAX_RETRIES" as any,
       });
     });
 
@@ -93,7 +93,7 @@ describe("ConfigService", () => {
       const mockGlobalConfig = {
         id: 2,
         environment: "global",
-        key: "MAX_RETRIES",
+        key: "MAX_RETRIES" as any,
         value: 3,
         encrypted: false,
         validated: true,
@@ -105,7 +105,7 @@ describe("ConfigService", () => {
         .mockResolvedValueOnce(null) // env-specific not found
         .mockResolvedValueOnce(mockGlobalConfig); // global found
 
-      const result = await configService.get("MAX_RETRIES", "prod-us-east");
+      const result = await configService.get("MAX_RETRIES" as any, "prod-us-east");
 
       expect(result).toBe(3);
     });
@@ -115,7 +115,7 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.where).mockReturnThis();
       vi.mocked(mockDb.first).mockResolvedValue(null);
 
-      const result = await configService.get("MAX_RETRIES", "prod-us-east");
+      const result = await configService.get("MAX_RETRIES" as any, "prod-us-east");
 
       expect(result).toBe(3); // Safe default
     });
@@ -136,7 +136,7 @@ describe("ConfigService", () => {
       const cachedValue = JSON.stringify(5);
       vi.mocked(mockRedis.get).mockResolvedValue(cachedValue);
 
-      const result = await configService.get("MAX_RETRIES", "prod-us-east");
+      const result = await configService.get("MAX_RETRIES" as any, "prod-us-east");
 
       expect(result).toBe(5);
       expect(mockDb.where).not.toHaveBeenCalled(); // DB not queried
@@ -146,7 +146,7 @@ describe("ConfigService", () => {
       const mockConfig = {
         id: 1,
         environment: "prod-us-east",
-        key: "MAX_RETRIES",
+        key: "MAX_RETRIES" as any,
         value: 5,
         encrypted: false,
         validated: true,
@@ -156,7 +156,7 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.where).mockReturnThis();
       vi.mocked(mockDb.first).mockResolvedValue(mockConfig);
 
-      await configService.get("MAX_RETRIES", "prod-us-east");
+      await configService.get("MAX_RETRIES" as any, "prod-us-east");
 
       expect(mockRedis.setex).toHaveBeenCalledWith(
         "config:prod-us-east:MAX_RETRIES",
@@ -173,7 +173,7 @@ describe("ConfigService", () => {
       });
       vi.mocked(mockDb.update).mockResolvedValue(1);
 
-      await configService.set("MAX_RETRIES", 5, {
+      await configService.set("MAX_RETRIES" as any, 5, {
         environment: "prod-us-east",
         changedBy: "admin@test.com",
       });
@@ -193,7 +193,7 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.where).mockReturnThis();
       vi.mocked(mockDb.first).mockResolvedValue(null);
 
-      await configService.set("MAX_RETRIES", 5, {
+      await configService.set("MAX_RETRIES" as any, 5, {
         environment: "global",
         changedBy: "admin@test.com",
       });
@@ -203,7 +203,7 @@ describe("ConfigService", () => {
 
     it("should reject invalid value", async () => {
       await expect(
-        configService.set("MAX_RETRIES", "invalid" as any, {
+        configService.set("MAX_RETRIES" as any, "invalid" as any, {
           environment: "global",
           changedBy: "admin@test.com",
         })
@@ -212,7 +212,7 @@ describe("ConfigService", () => {
 
     it("should reject out-of-range value", async () => {
       await expect(
-        configService.set("MAX_RETRIES", 100, {
+        configService.set("MAX_RETRIES" as any, 100, {
           environment: "global",
           changedBy: "admin@test.com",
         })
@@ -260,7 +260,7 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.where).mockReturnThis();
       vi.mocked(mockDb.first).mockResolvedValue(null);
 
-      await configService.set("MAX_RETRIES", 5, {
+      await configService.set("MAX_RETRIES" as any, 5, {
         environment: "global",
         changedBy: "admin@test.com",
       });
@@ -282,7 +282,7 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.first).mockResolvedValue(existingConfig);
       vi.mocked(mockDb.update).mockResolvedValue(1);
 
-      await configService.set("MAX_RETRIES", 5, {
+      await configService.set("MAX_RETRIES" as any, 5, {
         environment: "global",
         changedBy: "admin@test.com",
         changeReason: "Increase for peak load",
@@ -303,7 +303,7 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.where).mockReturnThis();
       vi.mocked(mockDb.first).mockResolvedValue(null);
 
-      await configService.set("MAX_RETRIES", 5, {
+      await configService.set("MAX_RETRIES" as any, 5, {
         environment: "global",
         changedBy: "admin@test.com",
       });
@@ -336,7 +336,7 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.orderBy).mockReturnThis();
       vi.mocked(mockDb.limit).mockResolvedValue(mockAudits);
 
-      const audits = await configService.getAuditTrail("MAX_RETRIES", "global");
+      const audits = await configService.getAuditTrail("MAX_RETRIES" as any, "global");
 
       expect(audits).toEqual(mockAudits);
     });
@@ -345,7 +345,7 @@ describe("ConfigService", () => {
   describe("Bulk Operations", () => {
     it("should export all configs for environment", async () => {
       const mockConfigs = [
-        { key: "MAX_RETRIES", value: 5 },
+        { key: "MAX_RETRIES" as any, value: 5 },
         { key: "LOG_LEVEL", value: "info" },
       ];
 
@@ -392,7 +392,7 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.delete).mockResolvedValue(1);
 
       await configService.delete(
-        "MAX_RETRIES",
+        "MAX_RETRIES" as any,
         "global",
         "admin@test.com",
         "No longer needed"
@@ -415,7 +415,7 @@ describe("ConfigService", () => {
       vi.mocked(mockDb.first).mockResolvedValue(null);
 
       await expect(
-        configService.delete("MAX_RETRIES", "global", "admin@test.com")
+        configService.delete("MAX_RETRIES" as any, "global", "admin@test.com")
       ).rejects.toThrow("not found");
     });
   });
