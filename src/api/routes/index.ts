@@ -57,6 +57,7 @@ import { ruleEvaluatorRoutes } from "./ruleEvaluator.routes.js";
 import { serviceAnnotationRoutes } from "./serviceAnnotation.routes.js";
 import { assetMergeRoutes } from "./assetMerge.routes.js";
 import { alertWindowingRoutes } from "./alertWindowing.routes.js";
+import { queryPresetsRoutes } from "./queryPresets.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -120,7 +121,9 @@ export async function registerRoutes(server: FastifyInstance) {
     prefix: "/api/v1/providers/health",
   });
   server.register(sourceHealthRoutes, { prefix: "/api/v1/sources/health" });
-  server.register(accessOverviewRoutes, { prefix: "/api/v1/admin/access-overview" });
+  server.register(accessOverviewRoutes, {
+    prefix: "/api/v1/admin/access-overview",
+  });
   server.register(reconciliationRoutes, { prefix: "/api/v1/reconciliation" });
   server.register(statusSubscriptionsRoutes, {
     prefix: "/api/v1/status-subscriptions",
@@ -137,7 +140,10 @@ export async function registerRoutes(server: FastifyInstance) {
   });
   server.register(archivedDataBrowserRoutes, { prefix: "/api/v1/archive" });
   server.register(ruleEvaluatorRoutes, { prefix: "/api/v1/rule-evaluator" });
-  server.register(serviceAnnotationRoutes, { prefix: "/api/v1/service-annotations" });
+  server.register(serviceAnnotationRoutes, {
+    prefix: "/api/v1/service-annotations",
+  });
   server.register(assetMergeRoutes, { prefix: "/api/v1/asset-merge" });
   server.register(alertWindowingRoutes, { prefix: "/api/v1/alert-windowing" });
+  server.register(queryPresetsRoutes, { prefix: "/api/v1/query-presets" });
 }
