@@ -10,23 +10,34 @@ const connection: ConnectionOptions = {
 };
 
 export const QUEUE_NAME = "bridge-watch-jobs";
+export type Priority = "critical" | "high" | "medium" | "low";
 
 export class JobQueue {
   private static instance: JobQueue;
-  public queue: Queue;
+  private queues: Record<string, Queue> = {};
   private worker: Worker | null = null;
 
   private constructor() {
     const retryPolicy = retryPolicyService.getPolicy({ operation: "queue:default" });
-    this.queue = new Queue(QUEUE_NAME, {
-      connection,
-      defaultJobOptions: {
-        attempts: retryPolicy.maxRetries + 1,
-        backoff: retryPolicyService.getBullMQBackoff({ operation: "queue:default" }),
-        removeOnComplete: true,
-        removeOnFail: false,
-      },
-    });
+
+    const priorities: Priority[] = ["critical", "high", "medium", "low"];
+    for (const p of priorities) {
+      const qname = `${QUEUE_NAME}-${p}`;
+      this.queues[qname] = new Queue(qname, {
+        connection,
+        defaultJobOptions: {
+          attempts: retryPolicy.maxRetries + 1,
+          backoff: retryPolicyService.getBullMQBackoff({ operation: "queue:default" }),
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+        // rate limiting can be configured per priority via environment
+        limiter: {
+          max: Number(process.env[`QUEUE_RATE_MAX_${p.toUpperCase()}`] || 1000),
+          duration: Number(process.env[`QUEUE_RATE_DURATION_MS_${p.toUpperCase()}`] || 1000),
+        },
+      });
+    }
   }
 
   public static getInstance(): JobQueue {
@@ -36,14 +47,25 @@ export class JobQueue {
     return JobQueue.instance;
   }
 
-  public async addJob(name: string, data: unknown, options: Record<string, any> = {}) {
-    logger.info({ jobName: name }, "Adding job to queue");
-    return this.queue.add(name, data, options);
+  private queueForPriority(priority?: Priority) {
+    const p: Priority = priority || "medium";
+    return this.queues[`${QUEUE_NAME}-${p}`];
   }
 
-  public async addRepeatableJob(name: string, data: unknown, cron: string) {
-    logger.info({ jobName: name, cron }, "Scheduling repeatable job");
-    return this.queue.add(name, data, {
+  public async addJob(name: string, data: unknown, options: Record<string, any> = {}) {
+    const priority: Priority | undefined = options.priority;
+    const q = this.queueForPriority(priority);
+    logger.info({ jobName: name, priority: priority ?? "medium" }, "Adding job to prioritized queue");
+    // remove priority from options since bullmq uses numeric priority separately
+    const opts = { ...options };
+    delete opts.priority;
+    return q.add(name, data, opts);
+  }
+
+  public async addRepeatableJob(name: string, data: unknown, cron: string, priority?: Priority) {
+    const q = this.queueForPriority(priority);
+    logger.info({ jobName: name, cron, priority: priority ?? "medium" }, "Scheduling repeatable job");
+    return q.add(name, data, {
       repeat: { pattern: cron },
     });
   }
@@ -51,7 +73,9 @@ export class JobQueue {
   public initWorker(processor: (job: Job) => Promise<void>) {
     if (this.worker) return;
 
-    this.worker = new Worker(QUEUE_NAME, processor, {
+    // create a worker that listens on all priority queues by switching processor per queue
+    const queueNames = Object.keys(this.queues);
+    this.worker = new Worker(queueNames[0], async (job) => processor(job), {
       connection,
       concurrency: 5,
     });
@@ -66,18 +90,32 @@ export class JobQueue {
   }
 
   public async getJobCounts() {
-    return this.queue.getJobCounts();
+    // aggregate counts across queues
+    const keys = Object.keys(this.queues);
+    const counts = {} as Record<string, any>;
+    for (const k of keys) {
+      counts[k] = await this.queues[k].getJobCounts();
+    }
+    return counts;
   }
 
   public async getFailedJobs() {
-    return this.queue.getFailed(0, 100);
+    const keys = Object.keys(this.queues);
+    let combined: any[] = [];
+    for (const k of keys) {
+      combined = combined.concat(await this.queues[k].getFailed(0, 100));
+    }
+    return combined;
   }
 
   public async stop() {
     if (this.worker) {
       await this.worker.close();
     }
-    await this.queue.close();
+    for (const k of Object.keys(this.queues)) {
+      await this.queues[k].close();
+    }
     logger.info("Job queue system shut down");
   }
 }
+

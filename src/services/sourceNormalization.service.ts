@@ -43,7 +43,7 @@ export interface ProviderAdapter {
  * Simple JSON‑Schema validator using AJV.
  */
 class SchemaValidator {
-  private ajv = new Ajv({ allErrors: true, strict: false });
+  private ajv = new Ajv({ allErrors: true, strictKeywords: false } as any);
   compile(schema: object) {
     return this.ajv.compile(schema);
   }
@@ -179,7 +179,7 @@ class StellarAdapter implements ProviderAdapter {
   }
 
   validate(payload: unknown): boolean {
-    return this.validateFn(payload);
+    return this.validateFn(payload) as boolean;
   }
 
   normalize(payload: unknown): NormalizedSource {

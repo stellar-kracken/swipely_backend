@@ -36,9 +36,9 @@ export class OutboxDispatcher {
     // Initialize BullMQ queue for event dispatch
     this.dispatchQueue = new Queue(dispatcherConfig.queueName, {
       connection: {
-        host: config.redis.host,
-        port: config.redis.port,
-        password: config.redis.password,
+        host: (config as any).REDIS_HOST ?? "localhost",
+        port: (config as any).REDIS_PORT ?? 6379,
+        password: (config as any).REDIS_PASSWORD || undefined,
       },
       defaultJobOptions: {
         removeOnComplete: 100,
@@ -53,9 +53,9 @@ export class OutboxDispatcher {
       this.processDispatchJob.bind(this),
       {
         connection: {
-          host: config.redis.host,
-          port: config.redis.port,
-          password: config.redis.password,
+          host: (config as any).REDIS_HOST ?? "localhost",
+          port: (config as any).REDIS_PORT ?? 6379,
+          password: (config as any).REDIS_PASSWORD || undefined,
         },
         concurrency: dispatcherConfig.concurrency,
       }
@@ -271,7 +271,7 @@ export class OutboxDispatcher {
   private async dispatchWebhookEvent(event: OutboxEventRecord): Promise<void> {
     // Import webhook service dynamically to avoid circular dependencies
     const { WebhookService } = await import("../services/webhook.service.js");
-    const webhookService = new WebhookService();
+    const webhookService = WebhookService.getInstance();
 
     if (event.eventType === "webhook.delivery") {
       // Queue individual webhook delivery
@@ -316,11 +316,15 @@ export class OutboxDispatcher {
     const { DiscordService } = await import("../services/discord.service.js");
     const discordService = new DiscordService();
 
-    await discordService.sendAlertEmbed(
-      event.payload.channelId,
-      event.payload.embed,
-      event.payload.alertData
-    );
+    await discordService.sendAlert({
+      id: event.id,
+      type: event.payload.alertData?.type ?? "bridge",
+      severity: event.payload.alertData?.severity ?? "medium",
+      title: event.payload.embed?.title ?? "Alert",
+      description: event.payload.embed?.description ?? "",
+      metadata: event.payload.alertData ?? {},
+      timestamp: new Date(),
+    });
   }
 
   /**
@@ -328,14 +332,12 @@ export class OutboxDispatcher {
    */
   private async dispatchDigestEvent(event: OutboxEventRecord): Promise<void> {
     const { DigestSchedulerService } = await import("../services/digestScheduler.service.js");
-    const digestService = new DigestSchedulerService();
+    const digestService = DigestSchedulerService.getInstance();
 
-    await digestService.scheduleDigest(
-      event.payload.userId,
-      event.payload.digestType,
-      event.payload.timezone,
-      event.payload.preferences
-    );
+    // generateDigests processes all eligible subscriptions for a given type
+    if (event.payload.digestType) {
+      await digestService.generateDigests(event.payload.digestType);
+    }
   }
 
   /**

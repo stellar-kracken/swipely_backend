@@ -1,5 +1,5 @@
 import { logger } from "../utils/logger.js";
-import { schemaDriftService } from "../services/schemaDrift.service.ts";
+import { schemaDriftService } from "../services/schemaDrift.service.js";
 import { getDatabase } from "../database/connection.js";
 
 /**
