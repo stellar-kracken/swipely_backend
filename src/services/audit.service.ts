@@ -25,7 +25,12 @@ export type AuditAction =
   | "webhook.endpoint_deleted"
   | "webhook.secret_rotated"
   | "export.initiated"
-  | "export.completed";
+  | "export.completed"
+  | "tag.created"
+  | "tag.updated"
+  | "tag.deleted"
+  | "tag.assigned"
+  | "tag.unassigned";
 
 export type AuditSeverity = "info" | "warning" | "critical";
 

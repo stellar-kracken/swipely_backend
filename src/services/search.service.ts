@@ -386,32 +386,52 @@ export class SearchService {
       .filter((row) => !row.is_active)
       .map((row) => `asset:${row.id}`);
 
+    const activeAssetIds = rows.filter((row) => row.is_active).map((row) => row.id);
+    const tagRows = activeAssetIds.length
+      ? await this.db("tags")
+          .join("asset_tags", "tags.id", "asset_tags.tag_id")
+          .whereIn("asset_tags.asset_id", activeAssetIds)
+          .select("asset_tags.asset_id", "tags.name")
+      : [];
+
+    const tagsByAssetId = new Map<string, string[]>();
+    for (const tr of tagRows) {
+      const arr = tagsByAssetId.get(tr.asset_id) ?? [];
+      arr.push(tr.name);
+      tagsByAssetId.set(tr.asset_id, arr);
+    }
+
     const documents = rows
       .filter((row) => row.is_active)
-      .map<SearchIndexDocumentInput>((row) => ({
-        documentKey: `asset:${row.id}`,
-        entityType: "asset",
-        entityId: String(row.id),
-        title: String(row.symbol),
-        subtitle: [row.name, row.bridge_provider, row.source_chain].filter(Boolean).join(" · "),
-        body: [row.name, row.asset_type, row.bridge_provider, row.source_chain].filter(Boolean).join(" "),
-        searchTokens: this.buildSearchTokens(
-          String(row.symbol),
-          row.name ? String(row.name) : "",
-          row.bridge_provider ? String(row.bridge_provider) : "",
-          row.source_chain ? String(row.source_chain) : ""
-        ),
-        metadata: {
-          symbol: row.symbol,
-          name: row.name,
-          bridgeProvider: row.bridge_provider,
-          sourceChain: row.source_chain,
-          href: `/assets/${row.symbol}`,
-        },
-        rankWeight: 120,
-        visibility: "public",
-        sourceUpdatedAt: new Date(row.updated_at ?? row.created_at ?? Date.now()),
-      }));
+      .map<SearchIndexDocumentInput>((row) => {
+        const tags = tagsByAssetId.get(row.id) ?? [];
+        return {
+          documentKey: `asset:${row.id}`,
+          entityType: "asset",
+          entityId: String(row.id),
+          title: String(row.symbol),
+          subtitle: [row.name, row.bridge_provider, row.source_chain, tags.length ? tags.join(", ") : ""].filter(Boolean).join(" · "),
+          body: [row.name, row.asset_type, row.bridge_provider, row.source_chain, ...tags].filter(Boolean).join(" "),
+          searchTokens: this.buildSearchTokens(
+            String(row.symbol),
+            row.name ? String(row.name) : "",
+            row.bridge_provider ? String(row.bridge_provider) : "",
+            row.source_chain ? String(row.source_chain) : "",
+            ...tags
+          ),
+          metadata: {
+            symbol: row.symbol,
+            name: row.name,
+            bridgeProvider: row.bridge_provider,
+            sourceChain: row.source_chain,
+            href: `/assets/${row.symbol}`,
+            tags,
+          },
+          rankWeight: 120,
+          visibility: "public",
+          sourceUpdatedAt: new Date(row.updated_at ?? row.created_at ?? Date.now()),
+        };
+      });
 
     return { documents, deleteDocumentKeys };
   }
@@ -626,6 +646,12 @@ export class SearchService {
     }
     if (filters.priority) {
       query = query.andWhereRaw("metadata::text ILIKE ?", [`%"priority":"${String(filters.priority)}"%`]);
+    }
+    if (filters.tag) {
+      query = query.andWhereRaw("metadata->'tags' @> ?::jsonb", [JSON.stringify([filters.tag])]);
+    }
+    if (filters.tags && Array.isArray(filters.tags)) {
+      query = query.andWhereRaw("metadata->'tags' @> ?::jsonb", [JSON.stringify(filters.tags)]);
     }
 
     query = query.andWhere(function searchMatcher() {
