@@ -18,6 +18,7 @@ import {
 import { initJobSystem } from "./workers/index.js";
 import { JobQueue } from "./workers/queue.js";
 import { initWebhookWorker, stopWebhookWorker } from "./workers/webhookDelivery.worker.js";
+import { initNotificationQueueWorker, stopNotificationQueueWorker } from "./workers/notificationQueue.worker.js";
 import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
@@ -210,6 +211,9 @@ async function start() {
     // Initialize webhook delivery worker
     await initWebhookWorker();
 
+    // Initialize notification queue worker
+    await initNotificationQueueWorker();
+
     // Start outbox dispatcher (after all other systems are ready)
     await startOutboxSystem();
     server.log.info("Outbox dispatcher started");
@@ -224,6 +228,7 @@ async function start() {
 
     // Stop outbox system first
     await stopOutboxSystem();
+    await stopNotificationQueueWorker();
     logger.info("Outbox system stopped");
 
     await wsServer.shutdown();
