@@ -34,7 +34,8 @@ import { alertRulesRoutes } from "./alertRules.js";
 import { auditRoutes } from "./audit.js";
 import { bridgeRegistryRoutes } from "./bridge-registry.routes.js";
 import { incidentRoutes } from "./incidents.routes.js";
-import { incidentTimelineRoutes } from "./incidentTimeline.routes.js";
+import { incidentCorrelationRoutes } from "./incidentCorrelation.routes.js";
+import { usageMetricsRoutes } from "./usageMetrics.routes.js";
 import { healthScoreHistoryRoutes } from "./healthScoreHistory.routes.js";
 import { horizonStreamRoutes } from "./horizonStream.routes.js";
 import { adminRotationRoutes } from "./adminRotation.js";
@@ -99,7 +100,10 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(auditRoutes, { prefix: "/api/v1/admin/audit" });
   server.register(bridgeRegistryRoutes, { prefix: "/api/v1/bridge-registry" });
   server.register(incidentRoutes, { prefix: "/api/v1/incidents" });
-  server.register(incidentTimelineRoutes, { prefix: "/api/v1/incidents" });
+  // Incident correlation endpoints (suggestions, manual link/unlink, approve)
+  server.register(incidentCorrelationRoutes, { prefix: "/api/v1/incidents" });
+  // Usage metrics admin endpoints
+  server.register(usageMetricsRoutes, { prefix: "/api/v1" });
   server.register(healthScoreHistoryRoutes, {
     prefix: "/api/v1/health-score-history",
   });
