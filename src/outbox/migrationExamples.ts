@@ -283,7 +283,7 @@ export class OutboxAdminRotationServiceExample {
         await this.outboxProducer.publishTransactional(tx, {
           aggregateType: "Security",
           aggregateId: `security-event-${Date.now()}`,
-          eventType: "security.admin_added",
+          eventType: "security.admin_added" as any,
           payload: {
             eventType: "privileged_admin_added",
             actorId,
@@ -521,6 +521,7 @@ export class OutboxMigrationUtils {
     let offset = 0;
     let processedCount = 0;
 
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const rows = await db(tableName)
         .select("*")
@@ -537,7 +538,7 @@ export class OutboxMigrationUtils {
           await outboxProducer.publishTransactional(tx, {
             aggregateType: eventMapping.aggregateType,
             aggregateId: row[eventMapping.aggregateIdColumn],
-            eventType: eventMapping.eventType,
+            eventType: eventMapping.eventType as any,
             payload: eventMapping.payloadMapper(row),
             metadata: {
               migratedFrom: tableName,

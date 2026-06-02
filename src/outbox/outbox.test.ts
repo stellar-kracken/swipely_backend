@@ -85,14 +85,14 @@ describe("Outbox Pattern Implementation", () => {
     };
 
     // Mock the raw query for sequence generation
-    vi.spyOn(db, "raw").mockImplementation(async (sql: string, bindings?: any[]) => {
+    vi.spyOn(db, "raw").mockImplementation((async (sql: string, bindings?: any[]) => {
       if (sql.includes("get_next_outbox_sequence")) {
         const [aggregateType, aggregateId] = bindings || [];
         const seq = await mockGetNextSequence(aggregateType, aggregateId);
         return [{ get_next_outbox_sequence: seq }];
       }
       return [];
-    });
+    }) as any);
 
     outboxProducer = new OutboxProducer(db);
     adminApi = new OutboxAdminApi(db);
@@ -334,7 +334,7 @@ describe("Outbox Pattern Implementation", () => {
         await outboxProducer.publish({
           aggregateType: "Test",
           aggregateId: `test-${i}`,
-          eventType: "test.event",
+          eventType: "test.event" as any,
           payload: { index: i },
         });
       }

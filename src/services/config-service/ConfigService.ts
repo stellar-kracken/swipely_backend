@@ -189,8 +189,9 @@ export class ConfigService {
       // Validate value with Zod schema
       const validationResult = safeValidateConfig(key, value);
       if (!validationResult.success) {
+        const failResult = validationResult as { success: false; error: import("zod").ZodError };
         throw new Error(
-          `Validation failed for ${key}: ${validationResult.error.message}`
+          `Validation failed for ${key}: ${failResult.error.message}`
         );
       }
       const validatedValue = validationResult.data;

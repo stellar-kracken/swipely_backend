@@ -9,7 +9,7 @@ export function escapeTelegramMarkdown(text: string): string {
 
   // Escape special characters used in markdown v2
   // Characters to escape: _ * [ ] ( ) ~ ` > # + - = | { } . !
-  const specialChars = /([_*\[\]()~`>#\+\-=|{}.!])/g;
+  const specialChars = /([_*[\]()~`>#+-=|{}.!])/g;
   return text.replace(specialChars, "\\$1");
 }
 

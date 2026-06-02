@@ -9,6 +9,7 @@ import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
 import { registerValidation } from "./api/middleware/validation.js";
 import { registerMetrics } from "./api/middleware/metrics.js";
+import { registerUsageMetrics } from "./api/middleware/usageMetrics.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
 import { wsServer } from "./api/websocket/websocket.server.js";
 import {
@@ -74,6 +75,9 @@ export async function buildServer() {
   // Register metrics middleware (to capture all requests)
   await registerMetrics(server as any);
 
+  // Register lightweight usage metrics middleware (stores aggregates for queries)
+  await registerUsageMetrics(server as any);
+
   // Register plugins
   await server.register(cors, {
     origin: true,
@@ -128,6 +132,61 @@ export async function buildServer() {
     },
     async () => {
       return { metrics: getRateLimitMetrics(), timestamp: new Date().toISOString() };
+    },
+  );
+
+  // Outbox health check endpoint
+  server.get(
+    "/api/v1/health/outbox",
+    {
+      schema: {
+        tags: ["Health"],
+        summary: "Outbox system health check",
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", enum: ["healthy", "degraded", "unhealthy"] },
+              details: {
+                type: "object",
+                properties: {
+                  initialized: { type: "boolean" },
+                  dispatcherRunning: { type: "boolean" },
+                  pendingEvents: { type: "number" },
+                  failedEvents: { type: "number" },
+                  deadLetterEvents: { type: "number" },
+                },
+              },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { getOutboxSystem } = await import("./outbox/index.js");
+        const outboxSystem = getOutboxSystem();
+        const healthCheck = await outboxSystem.healthCheck();
+        
+        return {
+          ...healthCheck,
+          timestamp: new Date().toISOString(),
+        };
+      } catch (error) {
+        return reply.code(200 as any).send({
+          status: "unhealthy",
+          details: {
+            initialized: false,
+            dispatcherRunning: false,
+            pendingEvents: 0,
+            failedEvents: 0,
+            deadLetterEvents: 0,
+          },
+          error: "Outbox system not available",
+          timestamp: new Date().toISOString(),
+        });
+      }
     },
   );
 

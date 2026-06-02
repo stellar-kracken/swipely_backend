@@ -3,6 +3,7 @@ import { getDatabase } from "../../../database/connection.js";
 import { createRedisClient } from "../../../config/redis.js";
 import { ConfigService } from "../../../services/config-service/ConfigService.js";
 import { ConfigKey } from "../../../services/config-service/validators.js";
+import type Redis from "ioredis";
 
 /**
  * Admin API Routes for Configuration Service
@@ -22,7 +23,7 @@ let configService: ConfigService;
 function getConfigService(): ConfigService {
   if (!configService) {
     const db = getDatabase();
-    const redis = createRedisClient();
+    const redis = createRedisClient() as Redis;
     configService = new ConfigService(db, redis);
   }
   return configService;

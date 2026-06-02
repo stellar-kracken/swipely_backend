@@ -1,0 +1,5 @@
+Routes added:
+- incidentCorrelation.routes.ts (registered under /api/v1/incidents by index.ts)
+- usageMetrics.routes.ts (registered under /api/v1 by index.ts)
+
+Note: index.ts in routes already registers incidentRoutes. Ensure to register new routes in registerRoutes function.
