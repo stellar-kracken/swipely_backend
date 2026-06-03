@@ -64,7 +64,7 @@ if (!response.ok) {
 
 ## Pagination
 
-Endpoints that return list data usually accept `page` and `limit` or a `limit` cap. Keep the page size small on dashboards and increase it for exports.
+List endpoints use different pagination models (`page`/`limit`, `offset`/`limit`, or Horizon `cursor`). See **[docs/pagination-guide.md](../../docs/pagination-guide.md)** for per-route parameters, response shapes, caps, and pitfalls.
 
 ```bash
 curl "http://localhost:3000/api/v1/exports?userId=demo&page=1&limit=20"

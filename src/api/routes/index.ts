@@ -53,10 +53,13 @@ import { eventSubscriptionFilterRoutes } from "./eventSubscriptionFilter.routes.
 import { maintenanceRoutes } from "./maintenance.js";
 import { notificationTemplatesRoutes } from "./notificationTemplates.js";
 import { archivedDataBrowserRoutes } from "./archivedDataBrowser.routes.js";
+import { circuitHealthRoutes } from "./circuitHealth.js";
 import { ruleEvaluatorRoutes } from "./ruleEvaluator.routes.js";
 import { serviceAnnotationRoutes } from "./serviceAnnotation.routes.js";
 import { assetMergeRoutes } from "./assetMerge.routes.js";
 import { alertWindowingRoutes } from "./alertWindowing.routes.js";
+import { queryPresetsRoutes } from "./queryPresets.js";
+import { duplicateAlertCheckRoutes } from "./duplicateAlertCheck.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -66,6 +69,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(alertHistoryRoutes, { prefix: "/api/v1/alerts/search" });
   server.register(exportsRoutes, { prefix: "/api/v1/exports" });
   server.register(circuitBreakerRoutes, { prefix: "/api/v1/circuit-breaker" });
+  server.register(circuitHealthRoutes, { prefix: "/api/v1/circuit-health" });
   server.register(preferencesRoutes, { prefix: "/api/v1/preferences" });
   server.register(apiKeysRoutes, { prefix: "/api/v1/admin/api-keys" });
   server.register(jobsRoutes, { prefix: "/api/v1/jobs" });
@@ -120,7 +124,9 @@ export async function registerRoutes(server: FastifyInstance) {
     prefix: "/api/v1/providers/health",
   });
   server.register(sourceHealthRoutes, { prefix: "/api/v1/sources/health" });
-  server.register(accessOverviewRoutes, { prefix: "/api/v1/admin/access-overview" });
+  server.register(accessOverviewRoutes, {
+    prefix: "/api/v1/admin/access-overview",
+  });
   server.register(reconciliationRoutes, { prefix: "/api/v1/reconciliation" });
   server.register(statusSubscriptionsRoutes, {
     prefix: "/api/v1/status-subscriptions",
@@ -137,7 +143,11 @@ export async function registerRoutes(server: FastifyInstance) {
   });
   server.register(archivedDataBrowserRoutes, { prefix: "/api/v1/archive" });
   server.register(ruleEvaluatorRoutes, { prefix: "/api/v1/rule-evaluator" });
-  server.register(serviceAnnotationRoutes, { prefix: "/api/v1/service-annotations" });
+  server.register(serviceAnnotationRoutes, {
+    prefix: "/api/v1/service-annotations",
+  });
   server.register(assetMergeRoutes, { prefix: "/api/v1/asset-merge" });
   server.register(alertWindowingRoutes, { prefix: "/api/v1/alert-windowing" });
+  server.register(queryPresetsRoutes, { prefix: "/api/v1/query-presets" });
+  server.register(duplicateAlertCheckRoutes, { prefix: "/api/v1/duplicate-alert-check" });
 }

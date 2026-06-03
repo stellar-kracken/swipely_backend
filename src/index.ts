@@ -19,6 +19,7 @@ import {
 import { initJobSystem } from "./workers/index.js";
 import { JobQueue } from "./workers/queue.js";
 import { initWebhookWorker, stopWebhookWorker } from "./workers/webhookDelivery.worker.js";
+import { initNotificationQueueWorker, stopNotificationQueueWorker } from "./workers/notificationQueue.worker.js";
 import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
@@ -208,16 +209,12 @@ async function start() {
     // Initialize webhook delivery worker
     await initWebhookWorker();
 
-    // Initialize Telegram bot service
-    const telegramService = getTelegramBotService();
-    if (config.TELEGRAM_BOT_ENABLED && config.TELEGRAM_BOT_TOKEN) {
-      try {
-        await telegramService.start();
-      } catch (error) {
-        server.log.error(error, "Failed to start Telegram bot service");
-        // Log error but don't exit - Telegram is a secondary service
-      }
-    }
+    // Initialize notification queue worker
+    await initNotificationQueueWorker();
+
+    // Start outbox dispatcher (after all other systems are ready)
+    await startOutboxSystem();
+    server.log.info("Outbox dispatcher started");
   } catch (err) {
     server.log.error(err);
     process.exit(1);
@@ -227,15 +224,10 @@ async function start() {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "Shutdown signal received");
 
-    // Stop Telegram bot service
-    const telegramService = getTelegramBotService();
-    if (telegramService.isRunning()) {
-      try {
-        await telegramService.stop();
-      } catch (error) {
-        logger.error(error, "Error stopping Telegram bot service");
-      }
-    }
+    // Stop outbox system first
+    await stopOutboxSystem();
+    await stopNotificationQueueWorker();
+    logger.info("Outbox system stopped");
 
     await wsServer.shutdown();
     await server.close();
