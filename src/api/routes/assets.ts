@@ -2,6 +2,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { HealthService } from "../../services/health.service.js";
 import { LiquidityService } from "../../services/liquidity.service.js";
 import { PriceService } from "../../services/price.service.js";
+import { assetTagService } from "../../services/assetTag.service.js";
+import { authMiddleware } from "../middleware/auth.js";
+
+function getAuditActorType(source: "api-key" | "bootstrap" | undefined): "user" | "api_key" | "system" {
+  if (source === "api-key") return "api_key";
+  if (source === "bootstrap") return "system";
+  return "user";
+}
 
 export async function assetsRoutes(server: FastifyInstance) {
   const healthService = new HealthService();
@@ -206,5 +214,169 @@ export async function assetsRoutes(server: FastifyInstance) {
       const price = await priceService.getAggregatedPrice(symbol);
       return price;
     },
+  );
+
+  // List all asset tags
+  server.get(
+    "/tags",
+    async (_request: FastifyRequest, _reply: FastifyReply) => {
+      const tags = await assetTagService.getAllTags();
+      return { tags };
+    }
+  );
+
+  // Get tag details
+  server.get<{ Params: { id: string } }>(
+    "/tags/:id",
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const { id } = request.params;
+      const tag = await assetTagService.getTagById(id);
+      if (!tag) {
+        return reply.status(404).send({ error: "Tag not found" });
+      }
+      return tag;
+    }
+  );
+
+  // Create an asset tag
+  server.post<{ Body: { name: string; color?: string | null } }>(
+    "/tags",
+    {
+      preHandler: authMiddleware({ requiredScopes: ["assets:write"] }),
+    },
+    async (request: FastifyRequest<{ Body: { name: string; color?: string | null } }>, reply: FastifyReply) => {
+      try {
+        const { name, color } = request.body;
+        const performedBy = request.apiKeyAuth?.name || "system";
+        const actorType = getAuditActorType(request.apiKeyAuth?.source);
+        const tag = await assetTagService.createTag(name, color || null, performedBy, actorType);
+        return reply.status(201).send(tag);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to create tag";
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
+
+  // Update an asset tag
+  server.put<{ Params: { id: string }; Body: { name?: string; color?: string | null } }>(
+    "/tags/:id",
+    {
+      preHandler: authMiddleware({ requiredScopes: ["assets:write"] }),
+    },
+    async (request: FastifyRequest<{ Params: { id: string }; Body: { name?: string; color?: string | null } }>, reply: FastifyReply) => {
+      try {
+        const { id } = request.params;
+        const performedBy = request.apiKeyAuth?.name || "system";
+        const actorType = getAuditActorType(request.apiKeyAuth?.source);
+        const tag = await assetTagService.updateTag(id, request.body, performedBy, actorType);
+        return tag;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to update tag";
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
+
+  // Delete an asset tag
+  server.delete<{ Params: { id: string } }>(
+    "/tags/:id",
+    {
+      preHandler: authMiddleware({ requiredScopes: ["assets:write"] }),
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      try {
+        const { id } = request.params;
+        const performedBy = request.apiKeyAuth?.name || "system";
+        const actorType = getAuditActorType(request.apiKeyAuth?.source);
+        await assetTagService.deleteTag(id, performedBy, actorType);
+        return reply.status(200).send({ success: true, message: "Tag deleted successfully" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to delete tag";
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
+
+  // Bulk assign tags to assets
+  server.post<{ Body: { assetSymbols: string[]; tagNames: string[] } }>(
+    "/tags/bulk-assign",
+    {
+      preHandler: authMiddleware({ requiredScopes: ["assets:write"] }),
+    },
+    async (request: FastifyRequest<{ Body: { assetSymbols: string[]; tagNames: string[] } }>, reply: FastifyReply) => {
+      try {
+        const { assetSymbols, tagNames } = request.body;
+        const performedBy = request.apiKeyAuth?.name || "system";
+        const actorType = getAuditActorType(request.apiKeyAuth?.source);
+        const result = await assetTagService.bulkAssignTags(assetSymbols, tagNames, performedBy, actorType);
+        return reply.status(200).send({ success: true, ...result });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to bulk assign tags";
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
+
+  // Get tags for an asset symbol
+  server.get<{ Params: { symbol: string } }>(
+    "/:symbol/tags",
+    async (request: FastifyRequest<{ Params: { symbol: string } }>, reply: FastifyReply) => {
+      try {
+        const { symbol } = request.params;
+        const tags = await assetTagService.getTagsForAsset(symbol);
+        return { symbol, tags };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to get tags for asset";
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
+
+  // Assign tags to an asset symbol
+  server.post<{ Params: { symbol: string }; Body: { tags: string[] } }>(
+    "/:symbol/tags",
+    {
+      preHandler: authMiddleware({ requiredScopes: ["assets:write"] }),
+    },
+    async (request: FastifyRequest<{ Params: { symbol: string }; Body: { tags: string[] } }>, reply: FastifyReply) => {
+      try {
+        const { symbol } = request.params;
+        const { tags } = request.body;
+        const performedBy = request.apiKeyAuth?.name || "system";
+        const actorType = getAuditActorType(request.apiKeyAuth?.source);
+
+        for (const tagName of tags) {
+          await assetTagService.assignTagToAsset(symbol, tagName, performedBy, actorType);
+        }
+
+        const currentTags = await assetTagService.getTagsForAsset(symbol);
+        return reply.status(200).send({ success: true, tags: currentTags });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to assign tags";
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
+
+  // Unassign a tag from an asset symbol
+  server.delete<{ Params: { symbol: string; tagName: string } }>(
+    "/:symbol/tags/:tagName",
+    {
+      preHandler: authMiddleware({ requiredScopes: ["assets:write"] }),
+    },
+    async (request: FastifyRequest<{ Params: { symbol: string; tagName: string } }>, reply: FastifyReply) => {
+      try {
+        const { symbol, tagName } = request.params;
+        const performedBy = request.apiKeyAuth?.name || "system";
+        const actorType = getAuditActorType(request.apiKeyAuth?.source);
+
+        await assetTagService.unassignTagFromAsset(symbol, tagName, performedBy, actorType);
+        return reply.status(200).send({ success: true, message: `Tag "${tagName}" unassigned from asset "${symbol}"` });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to unassign tag";
+        return reply.status(400).send({ error: message });
+      }
+    }
   );
 }
