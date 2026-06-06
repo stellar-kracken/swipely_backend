@@ -25,8 +25,7 @@ import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
 import { registerTracing } from "./api/middleware/tracing.js";
-import { getDatabase } from "./database/connection.js";
-import { initializeOutboxSystem, startOutboxSystem, stopOutboxSystem } from "./outbox/index.js";
+import { getTelegramBotService } from "./services/telegram.bot.service.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -203,11 +202,6 @@ async function start() {
     server.log.info(
       `Stellar Bridge Watch API running on port ${config.PORT}`
     );
-
-    // Initialize outbox system first (before other background services)
-    const db = getDatabase();
-    await initializeOutboxSystem(db);
-    server.log.info("Outbox system initialized");
 
     // Initialize background jobs
     await initJobSystem();
