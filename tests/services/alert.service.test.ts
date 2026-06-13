@@ -4,6 +4,19 @@ import {
   type AlertCondition,
   type MetricSnapshot,
 } from "../../src/services/alert.service.js";
+import { alertRoutingService } from "../../src/services/alertRouting.service.js";
+
+vi.mock("../../src/services/alertRouting.service.js", () => ({
+  alertRoutingService: {
+    routeAlert: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock("../../src/workers/circuitBreaker.worker.js", () => ({
+  circuitBreakerQueue: {
+    add: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 
 const suppressionServiceMock = {
   shouldSuppress: vi.fn().mockResolvedValue({
@@ -330,9 +343,9 @@ describe("AlertService — evaluateConditions (via evaluateAsset)", () => {
     vi.spyOn(service, "getActiveRulesForAsset").mockResolvedValue([rule]);
     vi.spyOn(service as any, "persistEvent").mockResolvedValue(undefined);
     vi.spyOn(service as any, "markRuleTriggered").mockResolvedValue(undefined);
-    const webhookSpy = vi
-      .spyOn(service, "dispatchWebhook")
-      .mockResolvedValue(undefined);
+    const routeSpy = vi
+      .spyOn(alertRoutingService, "routeAlert")
+      .mockResolvedValue(undefined as any);
 
     const snapshot: MetricSnapshot = {
       assetCode: "USDC",
@@ -340,16 +353,20 @@ describe("AlertService — evaluateConditions (via evaluateAsset)", () => {
     };
 
     await service.evaluateAsset(snapshot);
-    expect(webhookSpy).toHaveBeenCalledOnce();
+    expect(routeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webhookUrl: "https://hooks.example.com/alert",
+      })
+    );
   });
 
   it("does not dispatch webhook when not configured", async () => {
     vi.spyOn(service, "getActiveRulesForAsset").mockResolvedValue([makeRule()]);
     vi.spyOn(service as any, "persistEvent").mockResolvedValue(undefined);
     vi.spyOn(service as any, "markRuleTriggered").mockResolvedValue(undefined);
-    const webhookSpy = vi
-      .spyOn(service, "dispatchWebhook")
-      .mockResolvedValue(undefined);
+    const routeSpy = vi
+      .spyOn(alertRoutingService, "routeAlert")
+      .mockResolvedValue(undefined as any);
 
     const snapshot: MetricSnapshot = {
       assetCode: "USDC",
@@ -357,7 +374,11 @@ describe("AlertService — evaluateConditions (via evaluateAsset)", () => {
     };
 
     await service.evaluateAsset(snapshot);
-    expect(webhookSpy).not.toHaveBeenCalled();
+    expect(routeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webhookUrl: null,
+      })
+    );
   });
 
   it("returns events for all assets in batchEvaluate", async () => {
@@ -438,9 +459,9 @@ describe("AlertService — evaluateConditions (via evaluateAsset)", () => {
           } as AlertCondition,
         ],
       });
-      vi.spyOn(service, "getActiveRulesForAsset").mockResolvedValue([rule]);
-      vi.spyOn(service as any, "persistEvent").mockResolvedValue(undefined);
-      vi.spyOn(service as any, "markRuleTriggered").mockResolvedValue(undefined);
+      const rulesSpy = vi.spyOn(service, "getActiveRulesForAsset").mockResolvedValue([rule]);
+      const persistSpy = vi.spyOn(service as any, "persistEvent").mockResolvedValue(undefined);
+      const markSpy = vi.spyOn(service as any, "markRuleTriggered").mockResolvedValue(undefined);
 
       const snapshot: MetricSnapshot = {
         assetCode: "USDC",
@@ -451,7 +472,9 @@ describe("AlertService — evaluateConditions (via evaluateAsset)", () => {
       expect(events).toHaveLength(1);
       expect(events[0].alertType).toBe(alertType);
 
-      vi.restoreAllMocks();
+      rulesSpy.mockRestore();
+      persistSpy.mockRestore();
+      markSpy.mockRestore();
       suppressionServiceMock.shouldSuppress.mockResolvedValue({
         suppressed: false,
         matchedRule: null,

@@ -39,14 +39,14 @@ const mockedService = {
 vi.mock("../../src/services/preferences.service.js", () => {
   return {
     PreferencesService: class PreferencesService {
-      getPreferences = mockedService.getPreferences;
-      getPreference = mockedService.getPreference;
-      setPreference = mockedService.setPreference;
-      bulkUpdatePreferences = mockedService.bulkUpdatePreferences;
-      resetPreference = mockedService.resetPreference;
-      exportPreferences = mockedService.exportPreferences;
-      importPreferences = mockedService.importPreferences;
-      onPreferencesUpdated = mockedService.onPreferencesUpdated;
+      getPreferences = (...args: any[]) => mockedService.getPreferences(...args);
+      getPreference = (...args: any[]) => mockedService.getPreference(...args);
+      setPreference = (...args: any[]) => mockedService.setPreference(...args);
+      bulkUpdatePreferences = (...args: any[]) => mockedService.bulkUpdatePreferences(...args);
+      resetPreference = (...args: any[]) => mockedService.resetPreference(...args);
+      exportPreferences = (...args: any[]) => mockedService.exportPreferences(...args);
+      importPreferences = (...args: any[]) => mockedService.importPreferences(...args);
+      onPreferencesUpdated = (...args: any[]) => mockedService.onPreferencesUpdated(...args);
     },
   };
 });

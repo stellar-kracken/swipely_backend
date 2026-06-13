@@ -76,8 +76,13 @@ export async function buildServer() {
   await registerMetrics(server as any);
 
   // Register plugins
+  const corsOrigin = config.NODE_ENV === "production"
+    ? (config as any).CORS_ALLOWED_ORIGINS
+      ? (config as any).CORS_ALLOWED_ORIGINS.split(",").map((s: string) => s.trim())
+      : false  // block all cross-origin in production if not configured
+    : true;    // allow all origins in development/test
   await server.register(cors, {
-    origin: true,
+    origin: corsOrigin,
     credentials: true,
   });
 

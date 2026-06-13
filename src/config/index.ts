@@ -10,6 +10,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   WS_PORT: z.coerce.number().default(3002),
 
+  // CORS — comma-separated list of allowed origins for production
+  CORS_ALLOWED_ORIGINS: z.string().optional(),
+
   // PostgreSQL + TimescaleDB
   POSTGRES_HOST: z.string().default("localhost"),
   POSTGRES_PORT: z.coerce.number().default(5432),
@@ -209,7 +212,8 @@ export const SUPPORTED_ASSETS: StellarAssetConfig[] = [
   { code: "USDC", issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN" },
   { code: "PYUSD", issuer: "GBHZAE5IQTOPQZ66TFWZYIYCHQ6T3GMWHDKFEXAKYWJ2BHLZQ227KRYE" },
   { code: "EURC", issuer: "GDQOE23CFSUMSVZZ4YRVXGW7PCFNIAHLMRAHDE4Z32DIBQGH4KZZK2KZ" },
-  { code: "FOBXX", issuer: "GBX7VUT2UTUKO2H76J26D7QYWNFW6C2NYN6K74Y3K43HGBXYZ" },
+  // TODO: FOBXX issuer address is truncated (46 chars instead of 56). Verify correct address before enabling.
+  // { code: "FOBXX", issuer: "GBX7VUT2UTUKO2H76J26D7QYWNFW6C2NYN6K74Y3K43HGBXYZ" },
 ];
 
 const parsed = envSchema.safeParse(process.env);

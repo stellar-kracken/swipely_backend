@@ -32,18 +32,39 @@ vi.mock("../../src/utils/logger.js", () => ({
   },
 }));
 
-// Mock database
-const mockDb = {
-  insert: vi.fn().mockReturnThis(),
-  where: vi.fn().mockReturnThis(),
-  update: vi.fn().mockReturnThis(),
-  delete: vi.fn().mockReturnThis(),
-  first: vi.fn().mockResolvedValue(null),
-  select: vi.fn().mockReturnThis(),
-  orderBy: vi.fn().mockReturnThis(),
-  limit: vi.fn().mockResolvedValue([]),
-  raw: vi.fn().mockResolvedValue(null),
+// Mock database query builder
+const mockDbObj = {
+  insert: vi.fn(),
+  where: vi.fn(),
+  whereRaw: vi.fn(),
+  whereIn: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  first: vi.fn(),
+  select: vi.fn(),
+  orderBy: vi.fn(),
+  limit: vi.fn(),
+  raw: vi.fn(),
+  count: vi.fn(),
 };
+
+// Make chainable methods return mockDbObj by default
+mockDbObj.insert.mockReturnValue(mockDbObj);
+mockDbObj.where.mockReturnValue(mockDbObj);
+mockDbObj.whereRaw.mockReturnValue(mockDbObj);
+mockDbObj.whereIn.mockReturnValue(mockDbObj);
+mockDbObj.update.mockReturnValue(mockDbObj);
+mockDbObj.delete.mockReturnValue(mockDbObj);
+mockDbObj.first.mockResolvedValue(null);
+mockDbObj.select.mockReturnValue(mockDbObj);
+mockDbObj.orderBy.mockReturnValue(mockDbObj);
+mockDbObj.limit.mockResolvedValue([]);
+mockDbObj.raw.mockResolvedValue(null);
+mockDbObj.count.mockReturnValue(mockDbObj);
+
+// mockDb is a function returning the query builder, and also acts as the query builder itself
+const mockDb = vi.fn().mockImplementation(() => mockDbObj) as any;
+Object.assign(mockDb, mockDbObj);
 
 vi.mock("../../src/database/connection.js", () => ({
   getDatabase: () => mockDb,
@@ -106,8 +127,8 @@ describe("TelegramBotService", () => {
       expect(message).toContain("CRITICAL ALERT");
       expect(message).toContain("USDC");
       expect(message).toContain("Price Change");
-      expect(message).toContain("1.05");
-      expect(message).toContain("1.02");
+      expect(message).toContain("1\\.05");
+      expect(message).toContain("1\\.02");
     });
 
     it("should not exceed 4096 character limit", () => {
@@ -233,7 +254,7 @@ describe("TelegramBotService", () => {
       };
 
       mockDb.where.mockReturnThis();
-      mockDb.limit.mockResolvedValue([
+      mockDb.whereRaw.mockResolvedValue([
         {
           id: "sub-1",
           chat_id: "123",
@@ -247,9 +268,7 @@ describe("TelegramBotService", () => {
       ]);
 
       // Should format message correctly
-      await expect(async () => {
-        await telegramService.deliverAlert(alert);
-      }).resolves.not.toThrow();
+      await expect(telegramService.deliverAlert(alert)).resolves.not.toThrow();
     });
 
     it("should handle paused delivery", async () => {
@@ -307,11 +326,11 @@ describe("TelegramBotService", () => {
       mockDb.first.mockRejectedValue(new Error("DB Error"));
 
       // Service should not crash on DB errors
-      expect(async () => {
-        await telegramService.updateSubscription("chat-123", {
+      await expect(
+        telegramService.updateSubscription("chat-123", {
           severities: ["critical"],
-        });
-      }).resolves.not.toThrow();
+        })
+      ).resolves.not.toThrow();
     });
   });
 
@@ -440,8 +459,8 @@ describe("Message Formatter Utilities", () => {
       };
 
       const message = formatAlertMessage(alert);
-      expect(message).toContain("2.5");
-      expect(message).toContain("1.5");
+      expect(message).toContain("2\\.5");
+      expect(message).toContain("1\\.5");
     });
 
     it("should use correct emoji for each priority level", () => {

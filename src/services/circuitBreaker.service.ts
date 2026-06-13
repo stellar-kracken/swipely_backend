@@ -1,4 +1,5 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
+import { SorobanRpc } from "@stellar/stellar-sdk";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 import { getMetricsService } from "./metrics.service.js";
@@ -91,12 +92,12 @@ class CircuitBreakerService {
         .build();
 
       const result = await this.server.simulateTransaction(tx);
-      if ((result as any).result) {
+      if (SorobanRpc.Api.isSimulationSuccess(result)) {
         return StellarSdk.xdr.ScVal.fromXDR((result as any).result.retval, 'base64').value() === 1;
       }
       return false;
     } catch (error) {
-      logger.error({ error }, "Circuit breaker check failed");
+      logger.error(error as Error, "Circuit breaker check failed");
       // In case of error, assume not paused to avoid blocking operations
       return false;
     }
@@ -124,12 +125,12 @@ class CircuitBreakerService {
         .build();
 
       const result = await this.server.simulateTransaction(tx);
-      if ((result as any).result) {
+      if (SorobanRpc.Api.isSimulationSuccess(result)) {
         return StellarSdk.xdr.ScVal.fromXDR((result as any).result.retval, 'base64').value() === 1;
       }
       return false;
     } catch (error) {
-      logger.error({ error }, "Whitelist check failed");
+      logger.error(error as Error, "Whitelist check failed");
       return false;
     }
   }
@@ -154,12 +155,12 @@ class CircuitBreakerService {
         .build();
 
       const result = await this.server.simulateTransaction(tx);
-      if ((result as any).result) {
+      if (SorobanRpc.Api.isSimulationSuccess(result)) {
         return StellarSdk.xdr.ScVal.fromXDR((result as any).result.retval, 'base64').value() === 1;
       }
       return false;
     } catch (error) {
-      logger.error({ error }, "Asset whitelist check failed");
+      logger.error(error as Error, "Asset whitelist check failed");
       return false;
     }
   }
