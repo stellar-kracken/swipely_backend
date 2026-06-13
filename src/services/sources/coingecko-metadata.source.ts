@@ -1,8 +1,10 @@
 import { logger } from "../../utils/logger.js";
+import { providerAllowlistService } from "../providerAllowlist.service.js";
 import type { MetadataSourceAdapter, MetadataSourcePayload, MetadataSyncContext } from "./assetMetadataSync.types.js";
 
 const BASE_URL = "https://api.coingecko.com/api/v3";
 const TIMEOUT_MS = 8000;
+const PROVIDER_KEY = "coingecko";
 
 const SYMBOL_TO_ID: Record<string, string> = {
   XLM: "stellar",
@@ -50,6 +52,12 @@ export class CoinGeckoMetadataSource implements MetadataSourceAdapter {
   async fetch(context: MetadataSyncContext): Promise<MetadataSourcePayload | null> {
     const coinId = SYMBOL_TO_ID[context.symbol.toUpperCase()];
     if (!coinId) {
+      return null;
+    }
+
+    const allowed = await providerAllowlistService.isAllowed(PROVIDER_KEY);
+    if (!allowed) {
+      logger.info({ providerKey: PROVIDER_KEY }, "Provider disabled by allowlist");
       return null;
     }
 

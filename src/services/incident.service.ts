@@ -1,5 +1,6 @@
 import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
+import { enrichmentPipelineService } from "./enrichment/index.js";
 
 export type IncidentSeverity = "critical" | "high" | "medium" | "low";
 export type IncidentStatus = "open" | "investigating" | "resolved";
@@ -19,6 +20,10 @@ export interface BridgeIncident {
   sourceRepoAvatarUrl: string | null;
   sourceActor: string | null;
   sourceAttribution: Record<string, unknown>;
+  enrichmentMetadata: Record<string, unknown>;
+  enrichmentTags: string[];
+  derivedFields: Record<string, unknown>;
+  enrichmentValidation: Record<string, unknown>;
   requiresManualReview: boolean;
   ingestionAttemptCount: number;
   lastIngestionError: string | null;
@@ -52,6 +57,10 @@ export interface CreateIncidentPayload {
   sourceRepoAvatarUrl?: string;
   sourceActor?: string;
   sourceAttribution?: Record<string, unknown>;
+  enrichmentMetadata?: Record<string, unknown>;
+  enrichmentTags?: string[];
+  derivedFields?: Record<string, unknown>;
+  enrichmentValidation?: Record<string, unknown>;
   followUpActions?: string[];
   occurredAt?: string;
 }
@@ -86,6 +95,32 @@ export class IncidentService {
   }
 
   async createIncident(payload: CreateIncidentPayload): Promise<BridgeIncident> {
+    const enrichment = await enrichmentPipelineService.enrich({
+      recordType: "incident",
+      provider: payload.sourceType ?? "manual",
+      data: {
+        sourceType: payload.sourceType ?? "manual",
+        sourceExternalId: payload.sourceExternalId ?? null,
+        bridgeId: payload.bridgeId,
+        assetCode: payload.assetCode ?? null,
+        severity: payload.severity,
+        title: payload.title,
+        description: payload.description,
+        sourceUrl: payload.sourceUrl ?? null,
+        occurredAt: payload.occurredAt ?? new Date().toISOString(),
+        followUpActions: payload.followUpActions ?? [],
+        requiresManualReview: false,
+      },
+      context: {
+        rawMetadata: payload.sourceAttribution ?? {},
+      },
+    });
+
+    const enrichmentMetadata = {
+      ...enrichment.metadata,
+      rawMetadata: payload.sourceAttribution ?? {},
+    };
+
     const [row] = await this.db("bridge_incidents")
       .insert({
         bridge_id: payload.bridgeId,
@@ -99,7 +134,23 @@ export class IncidentService {
         source_repository: payload.sourceRepository ?? null,
         source_repo_avatar_url: payload.sourceRepoAvatarUrl ?? null,
         source_actor: payload.sourceActor ?? null,
-        source_attribution: JSON.stringify(payload.sourceAttribution ?? {}),
+        source_attribution: JSON.stringify({
+          ...(payload.sourceAttribution ?? {}),
+          enrichment: {
+            metadata: enrichmentMetadata,
+            tags: enrichment.tags,
+            derivedFields: enrichment.derivedFields,
+            validation: enrichment.validation,
+            attempts: enrichment.attempts,
+          },
+        }),
+        enrichment_metadata: JSON.stringify(payload.enrichmentMetadata ?? enrichmentMetadata),
+        enrichment_tags: payload.enrichmentTags ?? enrichment.tags,
+        derived_fields: JSON.stringify(payload.derivedFields ?? enrichment.derivedFields),
+        enrichment_validation: JSON.stringify(payload.enrichmentValidation ?? {
+          ...enrichment.validation,
+          attempts: enrichment.attempts,
+        }),
         follow_up_actions: JSON.stringify(payload.followUpActions ?? []),
         occurred_at: payload.occurredAt ? new Date(payload.occurredAt) : new Date(),
       })
@@ -159,6 +210,18 @@ export class IncidentService {
       sourceAttribution: typeof row.source_attribution === "object" && row.source_attribution !== null
         ? (row.source_attribution as Record<string, unknown>)
         : JSON.parse((row.source_attribution as string) || "{}"),
+      enrichmentMetadata: typeof row.enrichment_metadata === "object" && row.enrichment_metadata !== null
+        ? (row.enrichment_metadata as Record<string, unknown>)
+        : JSON.parse((row.enrichment_metadata as string) || "{}"),
+      enrichmentTags: Array.isArray(row.enrichment_tags)
+        ? (row.enrichment_tags as string[])
+        : [],
+      derivedFields: typeof row.derived_fields === "object" && row.derived_fields !== null
+        ? (row.derived_fields as Record<string, unknown>)
+        : JSON.parse((row.derived_fields as string) || "{}"),
+      enrichmentValidation: typeof row.enrichment_validation === "object" && row.enrichment_validation !== null
+        ? (row.enrichment_validation as Record<string, unknown>)
+        : JSON.parse((row.enrichment_validation as string) || "{}"),
       requiresManualReview: Boolean(row.requires_manual_review),
       ingestionAttemptCount: Number(row.ingestion_attempt_count ?? 0),
       lastIngestionError: (row.last_ingestion_error as string | null) ?? null,

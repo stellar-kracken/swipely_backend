@@ -9,6 +9,7 @@ import { logger } from "./utils/logger.js";
 import { registerRoutes } from "./api/routes/index.js";
 import { registerValidation } from "./api/middleware/validation.js";
 import { registerMetrics } from "./api/middleware/metrics.js";
+import { registerUsageMetrics } from "./api/middleware/usageMetrics.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
 import { wsServer } from "./api/websocket/websocket.server.js";
 import {
@@ -18,13 +19,13 @@ import {
 import { initJobSystem } from "./workers/index.js";
 import { JobQueue } from "./workers/queue.js";
 import { initWebhookWorker, stopWebhookWorker } from "./workers/webhookDelivery.worker.js";
+import { initNotificationQueueWorker, stopNotificationQueueWorker } from "./workers/notificationQueue.worker.js";
 import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
 import { registerTracing } from "./api/middleware/tracing.js";
-import { getDatabase } from "./database/connection.js";
-import { initializeOutboxSystem, startOutboxSystem, stopOutboxSystem } from "./outbox/index.js";
+import { getTelegramBotService } from "./services/telegram.bot.service.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -74,6 +75,9 @@ export async function buildServer() {
 
   // Register metrics middleware (to capture all requests)
   await registerMetrics(server as any);
+
+  // Register lightweight usage metrics middleware (stores aggregates for queries)
+  await registerUsageMetrics(server as any);
 
   // Register plugins
   const corsOrigin = config.NODE_ENV === "production"
@@ -204,16 +208,14 @@ async function start() {
       `Stellar Bridge Watch API running on port ${config.PORT}`
     );
 
-    // Initialize outbox system first (before other background services)
-    const db = getDatabase();
-    await initializeOutboxSystem(db);
-    server.log.info("Outbox system initialized");
-
     // Initialize background jobs
     await initJobSystem();
 
     // Initialize webhook delivery worker
     await initWebhookWorker();
+
+    // Initialize notification queue worker
+    await initNotificationQueueWorker();
 
     // Start outbox dispatcher (after all other systems are ready)
     await startOutboxSystem();
@@ -229,6 +231,7 @@ async function start() {
 
     // Stop outbox system first
     await stopOutboxSystem();
+    await stopNotificationQueueWorker();
     logger.info("Outbox system stopped");
 
     await wsServer.shutdown();

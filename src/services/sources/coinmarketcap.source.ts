@@ -10,6 +10,7 @@
 import { redis } from "../../utils/redis.js";
 import { logger } from "../../utils/logger.js";
 import { withRetry } from "../../utils/retry.js";
+import { providerAllowlistService } from "../providerAllowlist.service.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -20,6 +21,7 @@ const BASE_URL = "https://pro-api.coinmarketcap.com/v1";
 const CACHE_PREFIX = "cmc:price:";
 const CACHE_TTL_SEC = 60;
 const TIMEOUT_MS = 8_000;
+const PROVIDER_KEY = "coinmarketcap";
 
 /** Bridge-Watch symbols CoinMarketCap can serve (all symbols must match CMC) */
 const SUPPORTED_SYMBOLS = new Set([
@@ -122,6 +124,12 @@ export class CoinMarketCapSource {
   }
 
   async getPrices(symbols: string[]): Promise<CmcPriceResult[]> {
+    const allowed = await providerAllowlistService.isAllowed(PROVIDER_KEY);
+    if (!allowed) {
+      logger.info({ providerKey: PROVIDER_KEY }, "Provider disabled by allowlist");
+      return [];
+    }
+
     if (!this.apiKey) {
       logger.warn("CoinMarketCap API key not configured — skipping source");
       return [];

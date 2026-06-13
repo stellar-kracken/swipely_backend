@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
+import { enrichmentPipelineService, type EnrichmentResult } from "./enrichment/index.js";
 import { IncidentService, type IncidentSeverity, type BridgeIncident } from "./incident.service.js";
 
 export type IncidentSourceType = "github" | "webhook" | "partner" | "manual";
@@ -52,6 +53,10 @@ interface NormalizedIncident {
   sourceRepoAvatarUrl: string | null;
   sourceActor: string | null;
   sourceAttribution: Record<string, unknown>;
+  enrichmentMetadata: Record<string, unknown>;
+  enrichmentTags: string[];
+  derivedFields: Record<string, unknown>;
+  enrichmentValidation: Record<string, unknown>;
   normalizedFingerprint: string;
   requiresManualReview: boolean;
   reviewReason: string | null;
@@ -141,6 +146,10 @@ export class IncidentIngestionService {
         sourceUrl,
         metadata: raw.metadata ?? {},
       },
+      enrichmentMetadata: {},
+      enrichmentTags: [],
+      derivedFields: {},
+      enrichmentValidation: {},
       normalizedFingerprint,
       requiresManualReview: missing.length > 0,
       reviewReason: missing.length > 0 ? missing.join(",") : null,
@@ -148,7 +157,7 @@ export class IncidentIngestionService {
   }
 
   async ingest(raw: RawIncidentPayload): Promise<IngestIncidentResult> {
-    const normalized = this.normalize(raw);
+    const normalized = await this.enrichNormalized(this.normalize(raw), raw);
 
     if (normalized.requiresManualReview) {
       await this.enqueueReview(normalized, raw);
@@ -284,6 +293,10 @@ export class IncidentIngestionService {
         source_repo_avatar_url: normalized.sourceRepoAvatarUrl,
         source_actor: normalized.sourceActor,
         source_attribution: JSON.stringify(normalized.sourceAttribution),
+        enrichment_metadata: JSON.stringify(normalized.enrichmentMetadata),
+        enrichment_tags: normalized.enrichmentTags,
+        derived_fields: JSON.stringify(normalized.derivedFields),
+        enrichment_validation: JSON.stringify(normalized.enrichmentValidation),
         normalized_fingerprint: normalized.normalizedFingerprint,
         requires_manual_review: false,
         ingestion_attempt_count: 1,
@@ -299,6 +312,12 @@ export class IncidentIngestionService {
       source_type: normalized.sourceType,
       source_external_id: normalized.sourceExternalId,
       raw_payload: JSON.stringify(raw),
+      enriched_payload: JSON.stringify({
+        metadata: normalized.enrichmentMetadata,
+        tags: normalized.enrichmentTags,
+        derivedFields: normalized.derivedFields,
+        validation: normalized.enrichmentValidation,
+      }),
       reason: normalized.reviewReason,
       status: "pending",
       incident_id: null,
@@ -319,10 +338,71 @@ export class IncidentIngestionService {
       source_external_id: input.normalized.sourceExternalId,
       event_type: input.eventType,
       payload: JSON.stringify(input.normalized.sourceAttribution),
+      enrichment_metadata: JSON.stringify(input.normalized.enrichmentMetadata),
+      enrichment_tags: input.normalized.enrichmentTags,
+      derived_fields: JSON.stringify(input.normalized.derivedFields),
       status: input.status,
       error_message: input.errorMessage ?? null,
       attempt_number: input.attemptNumber,
     });
+  }
+
+  private async enrichNormalized(normalized: NormalizedIncident, raw: RawIncidentPayload): Promise<NormalizedIncident> {
+    const enrichment = await enrichmentPipelineService.enrich({
+      recordType: "incident",
+      provider: normalized.sourceType,
+      data: {
+        sourceType: normalized.sourceType,
+        sourceExternalId: normalized.sourceExternalId,
+        bridgeId: normalized.bridgeId,
+        assetCode: normalized.assetCode,
+        severity: normalized.severity,
+        title: normalized.title,
+        description: normalized.description,
+        sourceUrl: normalized.sourceUrl,
+        occurredAt: normalized.occurredAt,
+        followUpActions: normalized.followUpActions,
+        requiresManualReview: normalized.requiresManualReview,
+      },
+      context: {
+        rawMetadata: raw.metadata ?? {},
+        repository: normalized.sourceRepository,
+        actor: normalized.sourceActor,
+      },
+    });
+
+    return this.applyEnrichment(normalized, enrichment);
+  }
+
+  private applyEnrichment(
+    normalized: NormalizedIncident,
+    enrichment: EnrichmentResult,
+  ): NormalizedIncident {
+    const enrichmentMetadata = {
+      ...enrichment.metadata,
+      rawMetadata: normalized.sourceAttribution.metadata ?? {},
+    };
+
+    return {
+      ...normalized,
+      sourceAttribution: {
+        ...normalized.sourceAttribution,
+        enrichment: {
+          metadata: enrichmentMetadata,
+          tags: enrichment.tags,
+          derivedFields: enrichment.derivedFields,
+          validation: enrichment.validation,
+          attempts: enrichment.attempts,
+        },
+      },
+      enrichmentMetadata,
+      enrichmentTags: enrichment.tags,
+      derivedFields: enrichment.derivedFields,
+      enrichmentValidation: {
+        ...enrichment.validation,
+        attempts: enrichment.attempts,
+      },
+    };
   }
 
   private mapSeverity(sourceSeverity: string | undefined): IncidentSeverity {

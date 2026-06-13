@@ -24,10 +24,7 @@ export async function accessOverviewRoutes(server: FastifyInstance) {
       tags: ["Admin"],
       summary: "Create or register a workspace access summary",
       body: { type: "object", additionalProperties: true },
-      response: {
-        201: { type: "object", additionalProperties: true },
-        400: { type: "object", additionalProperties: true },
-      },
+      response: { 201: { type: "object", additionalProperties: true }, 400: { $ref: "Error#" } },
     },
   }, async (request, reply) => {
     const parsed = summarySchema.safeParse(request.body);

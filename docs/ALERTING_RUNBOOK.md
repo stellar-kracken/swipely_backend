@@ -847,7 +847,7 @@ Alert Triggered
 ## Additional Resources
 
 - [Alert Configuration Guide](./alerts-configuration.md)
-- [Incident Management Process](./incident-management.md)
+- [Incident Response Templates](../../docs/runbooks/incident-response-templates.md)
 - [Bridge Operator Contacts](./bridge-operators.md)
 - [Monitoring Dashboard](https://dashboard.bridge-watch.io)
 - [Status Page](https://status.bridge-watch.io)

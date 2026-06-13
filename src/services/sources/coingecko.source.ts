@@ -13,6 +13,7 @@ import { redis } from "../../utils/redis.js";
 import { logger } from "../../utils/logger.js";
 import { withRetry } from "../../utils/retry.js";
 import { schemaDriftService } from "../schemaDrift.service.js";
+import { providerAllowlistService } from "../providerAllowlist.service.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -23,6 +24,7 @@ const BASE_URL = "https://api.coingecko.com/api/v3";
 const CACHE_PREFIX = "coingecko:price:";
 const CACHE_TTL_SEC = 60;
 const TIMEOUT_MS = 8_000;
+const PROVIDER_KEY = "coingecko";
 
 /** Map from Bridge-Watch asset symbol → CoinGecko coin ID */
 const SYMBOL_TO_ID: Record<string, string> = {
@@ -113,6 +115,12 @@ export class CoinGeckoSource {
 
   /** Fetch price data for one or more symbols. Results are Redis-cached. */
   async getPrices(symbols: string[]): Promise<CoinGeckoPriceResult[]> {
+    const allowed = await providerAllowlistService.isAllowed(PROVIDER_KEY);
+    if (!allowed) {
+      logger.info({ providerKey: PROVIDER_KEY }, "Provider disabled by allowlist");
+      return [];
+    }
+
     const upper = symbols.map((s) => s.toUpperCase());
     const ids = upper.map((s) => SYMBOL_TO_ID[s]).filter(Boolean);
 
