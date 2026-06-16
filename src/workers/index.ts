@@ -14,6 +14,7 @@ import { logger } from "../utils/logger.js";
 import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
 import { runAuditRetentionJob } from "../jobs/auditRetention.job.js";
 import { processCachePriming } from "./cachePrimer.job.js";
+import { processAnomalyDetection } from "./anomalyDetection.job.js";
 
 export async function initJobSystem() {
   const jobQueue = JobQueue.getInstance();
@@ -65,6 +66,9 @@ export async function initJobSystem() {
         break;
       case "reconciliation":
         await processReconciliation(job as any);
+        break;
+      case "anomaly-detection":
+        await processAnomalyDetection(job);
         break;
       default:
         logger.warn({ jobName: job.name }, "Unknown job name in worker");
@@ -136,6 +140,8 @@ export async function initJobSystem() {
   await jobQueue.addRepeatableJob("external-dependency-monitor", {}, "*/2 * * * *");
   // Staleness detection: every 5 minutes
   await jobQueue.addRepeatableJob("staleness-detection", {}, "*/5 * * * *");
+  // Anomaly detection: correlate fresh price, liquidity, supply, and bridge signals every minute
+  await jobQueue.addRepeatableJob("anomaly-detection", {}, "*/1 * * * *");
   // reconciliation: per-asset, every hour (top of hour)
   // Note: This uses the queue helper for retry/backoff defaults.
   for (const assetCode of ["USDC", "EURC"]) {

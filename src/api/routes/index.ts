@@ -64,6 +64,7 @@ import { freshnessRoutes } from "./freshness.js";
 import { providerAllowlistRoutes } from "./providerAllowlist.routes.js";
 import { providerAllowlistAdminRoutes } from "./providerAllowlistAdmin.routes.js";
 import { provenanceRoutes } from "./provenance.routes.js";
+import { anomalyDetectionRoutes } from "./anomalyDetection.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -162,4 +163,5 @@ export async function registerRoutes(server: FastifyInstance) {
     prefix: "/api/v1/admin/providers/allowlist",
   });
   server.register(provenanceRoutes, { prefix: "/api/v1/provenance" });
+  server.register(anomalyDetectionRoutes, { prefix: "/api/v1/anomaly-detection" });
 }
