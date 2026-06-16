@@ -180,6 +180,10 @@ const envSchema = z.object({
   HEALTH_CHECK_MEMORY_THRESHOLD: z.coerce.number().default(90),
   HEALTH_CHECK_DISK_THRESHOLD: z.coerce.number().default(80),
   HEALTH_CHECK_EXTERNAL_APIS: z.string().default("true"),
+  MAINTENANCE_MODE: z.coerce.boolean().default(false),
+  MAINTENANCE_MESSAGE: z.string().default(""),
+  MAINTENANCE_SEVERITY: z.enum(["info", "warning", "critical"]).default("info"),
+  STATUS_PAGE_URL: z.string().url().optional(),
 
   // Data Validation Configuration
   VALIDATION_STRICT_MODE: z.coerce.boolean().default(false),

@@ -517,7 +517,7 @@ export class OwnershipMatrixService {
         "alert_ownership.created_at"
       );
 
-    let countQuery = db("alert_ownership")
+    const countQuery = db("alert_ownership")
       .join("alert_rules", "alert_ownership.alert_id", "alert_rules.id")
       .where((builder) => {
         builder

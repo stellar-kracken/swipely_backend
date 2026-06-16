@@ -184,8 +184,11 @@ export class CorrelationService {
       await trx("incident_correlation_audit").insert({ action: "unlinked", group_id: groupId, incident_id: incidentId, target_incident_id: targetIncidentId, actor, metadata: JSON.stringify({}) });
 
       // if group has fewer than 2 members, delete group
-      const [{ count }] = await trx("incident_correlation_members").where({ group_id: groupId }).count<{ count: string }>("id as count");
-      if (Number(count) < 2) {
+      const countRow = await trx("incident_correlation_members")
+        .where({ group_id: groupId })
+        .count<{ count: string }>("id as count")
+        .first();
+      if (Number(countRow?.count ?? 0) < 2) {
         await trx("incident_correlation_members").where({ group_id: groupId }).del();
         await trx("incident_correlation_groups").where({ id: groupId }).del();
       }
