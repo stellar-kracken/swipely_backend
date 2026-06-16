@@ -36,7 +36,7 @@ export class JobQueue {
           max: Number(process.env[`QUEUE_RATE_MAX_${p.toUpperCase()}`] || 1000),
           duration: Number(process.env[`QUEUE_RATE_DURATION_MS_${p.toUpperCase()}`] || 1000),
         },
-      });
+      } as any);
     }
   }
 
@@ -118,4 +118,3 @@ export class JobQueue {
     logger.info("Job queue system shut down");
   }
 }
-

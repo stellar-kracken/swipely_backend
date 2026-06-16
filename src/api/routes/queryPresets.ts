@@ -33,6 +33,10 @@ interface ListPresetsQuery {
   search?: string;
 }
 
+function getRequestUserId(request: FastifyRequest): string {
+  return request.apiKeyAuth?.id ?? "00000000-0000-0000-0000-000000000000";
+}
+
 export async function queryPresetsRoutes(server: FastifyInstance) {
   // Create preset
   server.post<{ Body: CreatePresetBody }>(
@@ -58,7 +62,7 @@ export async function queryPresetsRoutes(server: FastifyInstance) {
     },
     async (request, reply) => {
       try {
-        const userId = request.user?.id || "anonymous";
+        const userId = getRequestUserId(request);
 
         // Validate query definition
         const isValid = await queryPresetService.validateQueryDefinition(
@@ -103,7 +107,7 @@ export async function queryPresetsRoutes(server: FastifyInstance) {
     },
     async (request, reply) => {
       try {
-        const userId = request.user?.id || "anonymous";
+        const userId = getRequestUserId(request);
 
         const filters = {
           category: request.query.category,
@@ -139,7 +143,7 @@ export async function queryPresetsRoutes(server: FastifyInstance) {
     },
     async (request, reply) => {
       try {
-        const userId = request.user?.id || "anonymous";
+        const userId = getRequestUserId(request);
 
         const preset = await queryPresetService.getPresetById(
           request.params.id,
@@ -195,7 +199,7 @@ export async function queryPresetsRoutes(server: FastifyInstance) {
     },
     async (request, reply) => {
       try {
-        const userId = request.user?.id || "anonymous";
+        const userId = getRequestUserId(request);
 
         // Validate query definition if provided
         if (request.body.query_definition) {
@@ -254,7 +258,7 @@ export async function queryPresetsRoutes(server: FastifyInstance) {
     },
     async (request, reply) => {
       try {
-        const userId = request.user?.id || "anonymous";
+        const userId = getRequestUserId(request);
 
         const success = await queryPresetService.deletePreset(
           request.params.id,
@@ -296,7 +300,7 @@ export async function queryPresetsRoutes(server: FastifyInstance) {
     },
     async (request, reply) => {
       try {
-        const userId = request.user?.id || "anonymous";
+        const userId = getRequestUserId(request);
 
         const versions = await queryPresetService.getPresetVersions(
           request.params.id,

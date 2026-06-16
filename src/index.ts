@@ -26,6 +26,7 @@ import { registerCorrelationMiddleware } from "./api/middleware/correlation.midd
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
 import { registerTracing } from "./api/middleware/tracing.js";
 import { getTelegramBotService } from "./services/telegram.bot.service.js";
+import { startOutboxSystem, stopOutboxSystem } from "./outbox/index.js";
 
 export async function buildServer() {
   const server = Fastify({

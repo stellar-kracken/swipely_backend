@@ -53,7 +53,7 @@ export async function duplicateAlertCheckRoutes(server: FastifyInstance) {
   );
 
   // POST /dedup-rules — add a new dedup rule
-  server.post(
+  server.post<{ Body: any }>(
     "/dedup-rules",
     {
       schema: {
@@ -83,8 +83,9 @@ export async function duplicateAlertCheckRoutes(server: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: any }>, reply: FastifyReply) => {
+      const body = request.body as any;
       const { name, alertType, assetCode, windowMs, matchFields, severityBehavior, isActive } =
-        request.body;
+        body;
       const rule = duplicateAlertCheckService.addDedupRule({
         name,
         alertType: alertType ?? "*",

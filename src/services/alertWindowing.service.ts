@@ -79,7 +79,7 @@ export class AlertWindowingService {
     const windowKey = this.determineWindowKey(alert);
     const windowStart = this.getWindowStart(alert.occurredAt);
 
-    let window = await db("alert_windows")
+    const window = await db("alert_windows")
       .where("asset_code", alert.assetCode)
       .where("alert_type", alert.alertType)
       .where("window_start", windowStart)
