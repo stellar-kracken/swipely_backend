@@ -4,7 +4,7 @@ export async function up(knex: Knex): Promise<void> {
   // Search analytics table (hypertable for time-series data)
   await knex.schema.createTable("search_analytics", (table) => {
     table.timestamp("time").notNullable().defaultTo(knex.fn.now());
-    table.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
+    table.uuid("id").notNullable().defaultTo(knex.raw("gen_random_uuid()"));
     table.string("query").notNullable();
     table.string("user_id").nullable();
     table.integer("results_count").nullable();
@@ -12,7 +12,10 @@ export async function up(knex: Knex): Promise<void> {
     table.json("filters").nullable();
     table.string("user_agent").nullable();
     table.string("ip_address").nullable();
-    
+
+    // Composite primary key required by TimescaleDB hypertable on 'time' column
+    table.primary(["id", "time"]);
+
     // Indexes for performance
     table.index(["query", "time"]);
     table.index("user_id");
