@@ -4,7 +4,7 @@ export async function up(knex: Knex): Promise<void> {
   // Cleanup metrics table (hypertable for time-series data)
   await knex.schema.createTable("cleanup_metrics", (table) => {
     table.timestamp("time").notNullable().defaultTo(knex.fn.now());
-    table.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
+    table.uuid("id").notNullable().defaultTo(knex.raw("gen_random_uuid()"));
     table.integer("total_records_processed").notNullable().defaultTo(0);
     table.integer("total_records_archived").notNullable().defaultTo(0);
     table.integer("total_records_deleted").notNullable().defaultTo(0);
@@ -13,7 +13,10 @@ export async function up(knex: Knex): Promise<void> {
     table.json("reports").notNullable();
     table.string("trigger_type").notNullable(); // scheduled, manual
     table.string("triggered_by").nullable();
-    
+
+    // Composite primary key required by TimescaleDB hypertable on 'time' column
+    table.primary(["id", "time"]);
+
     // Indexes
     table.index("time");
     table.index("trigger_type");
