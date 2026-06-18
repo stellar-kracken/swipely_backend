@@ -14,6 +14,8 @@ interface EvaluateBody {
   metrics: Record<string, number>;
   previousMetrics?: Record<string, number>;
   previewMode?: boolean;
+  executedBy?: string;
+  executionContext?: string;
 }
 
 interface EvaluateBatchBody {
@@ -27,12 +29,18 @@ interface EvaluateBatchBody {
   metrics: Record<string, number>;
   previousMetrics?: Record<string, number>;
   previewMode?: boolean;
+  executedBy?: string;
+  executionContext?: string;
 }
 
 interface HistoryQuery {
   ruleId?: string;
   assetCode?: string;
   triggered?: string;
+  executedBy?: string;
+  executionContext?: string;
+  from?: string;
+  to?: string;
   limit?: string;
   offset?: string;
 }
@@ -42,12 +50,23 @@ export async function ruleEvaluatorRoutes(server: FastifyInstance) {
     "/evaluate",
     async (request: FastifyRequest<{ Body: EvaluateBody }>, reply: FastifyReply) => {
       try {
-        const { ruleName, ruleId, assetCode, conditions, logicOperator, metrics, previousMetrics, previewMode } = request.body;
+        const {
+          ruleName,
+          ruleId,
+          assetCode,
+          conditions,
+          logicOperator,
+          metrics,
+          previousMetrics,
+          previewMode,
+          executedBy,
+          executionContext,
+        } = request.body;
         const result = ruleEvaluatorService.evaluate(
           { ruleName, ruleId, assetCode, conditions, logicOperator },
           metrics,
           previousMetrics,
-          previewMode
+          { previewMode, executedBy, executionContext }
         );
         return result;
       } catch (error) {
@@ -61,12 +80,19 @@ export async function ruleEvaluatorRoutes(server: FastifyInstance) {
     "/evaluate/batch",
     async (request: FastifyRequest<{ Body: EvaluateBatchBody }>, reply: FastifyReply) => {
       try {
-        const { rules, metrics, previousMetrics, previewMode } = request.body;
+        const {
+          rules,
+          metrics,
+          previousMetrics,
+          previewMode,
+          executedBy,
+          executionContext,
+        } = request.body;
         const results = ruleEvaluatorService.evaluateBatch(
           rules,
           metrics,
           previousMetrics,
-          previewMode
+          { previewMode, executedBy, executionContext }
         );
         return {
           evaluatedAt: new Date().toISOString(),
@@ -83,11 +109,25 @@ export async function ruleEvaluatorRoutes(server: FastifyInstance) {
   server.get<{ Querystring: HistoryQuery }>(
     "/evaluate/history",
     async (request: FastifyRequest<{ Querystring: HistoryQuery }>) => {
-      const { ruleId, assetCode, triggered, limit, offset } = request.query;
+      const {
+        ruleId,
+        assetCode,
+        triggered,
+        executedBy,
+        executionContext,
+        from,
+        to,
+        limit,
+        offset,
+      } = request.query;
       return ruleEvaluatorService.getEvaluationHistory({
         ruleId,
         assetCode,
         triggered: triggered !== undefined ? triggered === "true" : undefined,
+        executedBy,
+        executionContext,
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined,
         limit: limit ? parseInt(limit, 10) : undefined,
         offset: offset ? parseInt(offset, 10) : undefined,
       });
