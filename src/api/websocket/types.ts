@@ -34,7 +34,7 @@ export interface WsSocket {
 // ─── Channel definition ────────────────────────────────────────────────────────
 
 /** Names of all available subscription channels. */
-export type ChannelName = "prices" | "health" | "alerts" | "bridges";
+export type ChannelName = "prices" | "health" | "alerts" | "bridges" | "events";
 
 /** Channels that require a valid auth token to subscribe. */
 export const PRIVATE_CHANNELS = new Set<ChannelName>(["alerts"]);
@@ -45,6 +45,7 @@ export const ALL_CHANNELS: ChannelName[] = [
   "health",
   "alerts",
   "bridges",
+  "events",
 ];
 
 // ─── Broadcaster interface (breaks circular dep with channels) ─────────────────
@@ -296,4 +297,5 @@ export const REDIS_WS_CHANNELS = {
   health: "ws:channel:health",
   alerts: "ws:channel:alerts",
   bridges: "ws:channel:bridges",
+  events: "ws:channel:events",
 } as const satisfies Record<ChannelName, string>;
