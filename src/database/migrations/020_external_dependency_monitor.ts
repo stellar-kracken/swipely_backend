@@ -28,7 +28,7 @@ export async function up(knex: Knex): Promise<void> {
 
   await knex.schema.createTable("external_dependency_checks", (table) => {
     table.timestamp("checked_at").notNullable().defaultTo(knex.fn.now());
-    table.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
+    table.uuid("id").notNullable().defaultTo(knex.raw("gen_random_uuid()"));
     table.string("provider_key").notNullable();
     table.string("status").notNullable();
     table.integer("latency_ms").nullable();
@@ -37,6 +37,9 @@ export async function up(knex: Knex): Promise<void> {
     table.boolean("alert_triggered").notNullable().defaultTo(false);
     table.text("error").nullable();
     table.jsonb("details").notNullable().defaultTo("{}");
+
+    // Composite primary key required by TimescaleDB hypertable on 'checked_at' column
+    table.primary(["id", "checked_at"]);
 
     table.index(["provider_key", "checked_at"]);
     table.index(["status", "checked_at"]);

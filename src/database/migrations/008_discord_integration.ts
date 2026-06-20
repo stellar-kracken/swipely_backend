@@ -24,7 +24,7 @@ export async function up(knex: Knex): Promise<void> {
   // Discord alerts log table (hypertable for time-series data)
   await knex.schema.createTable("discord_alerts_log", (table) => {
     table.timestamp("time").notNullable().defaultTo(knex.fn.now());
-    table.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
+    table.uuid("id").notNullable().defaultTo(knex.raw("gen_random_uuid()"));
     table.string("subscription_id").notNullable();
     table.string("alert_id").notNullable();
     table.string("alert_type").notNullable(); // bridge, pool, price, health
@@ -38,6 +38,9 @@ export async function up(knex: Knex): Promise<void> {
     table.boolean("delivered").defaultTo(false);
     table.text("error_message").nullable();
     
+    // Composite primary key required by TimescaleDB hypertable on 'time' column
+    table.primary(["id", "time"]);
+
     // Indexes
     table.index(["subscription_id", "time"]);
     table.index(["guild_id", "channel_id"]);
@@ -55,7 +58,7 @@ export async function up(knex: Knex): Promise<void> {
   // Discord commands usage table (hypertable for analytics)
   await knex.schema.createTable("discord_commands_usage", (table) => {
     table.timestamp("time").notNullable().defaultTo(knex.fn.now());
-    table.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
+    table.uuid("id").notNullable().defaultTo(knex.raw("gen_random_uuid()"));
     table.string("guild_id").notNullable();
     table.string("channel_id").notNullable();
     table.string("user_id").notNullable();
@@ -64,7 +67,10 @@ export async function up(knex: Knex): Promise<void> {
     table.integer("response_time_ms").defaultTo(0);
     table.boolean("success").defaultTo(true);
     table.text("error_message").nullable();
-    
+
+    // Composite primary key required by TimescaleDB hypertable on 'time' column
+    table.primary(["id", "time"]);
+
     // Indexes
     table.index(["guild_id", "time"]);
     table.index("command_name");

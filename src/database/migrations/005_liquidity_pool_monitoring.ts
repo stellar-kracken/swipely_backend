@@ -28,7 +28,7 @@ export async function up(knex: Knex): Promise<void> {
   // Pool events table (hypertable for time-series data)
   await knex.schema.createTable("pool_events", (table) => {
     table.timestamp("time").notNullable().defaultTo(knex.fn.now());
-    table.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
+    table.uuid("id").notNullable().defaultTo(knex.raw("gen_random_uuid()"));
     table.uuid("pool_id").notNullable();
     table.string("type").notNullable(); // deposit, withdraw, swap
     table.decimal("amount_a", 20, 8).notNullable();
@@ -36,7 +36,10 @@ export async function up(knex: Knex): Promise<void> {
     table.string("user").notNullable();
     table.string("tx_hash").notNullable();
     table.json("metadata").nullable();
-    
+
+    // Composite primary key required by TimescaleDB hypertable on 'time' column
+    table.primary(["id", "time"]);
+
     // Indexes
     table.index(["pool_id", "time"]);
     table.index("type");

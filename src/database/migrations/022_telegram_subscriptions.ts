@@ -23,7 +23,7 @@ export async function up(knex: Knex): Promise<void> {
   // Telegram alerts delivery log (hypertable for time-series data)
   await knex.schema.createTable("telegram_alerts_log", (table) => {
     table.timestamp("time").notNullable().defaultTo(knex.fn.now());
-    table.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
+    table.uuid("id").notNullable().defaultTo(knex.raw("gen_random_uuid()"));
     table.uuid("subscription_id").notNullable();
     table.string("chat_id").notNullable();
     table.string("alert_id").notNullable();
@@ -36,6 +36,9 @@ export async function up(knex: Knex): Promise<void> {
     table.string("message_id").nullable(); // Telegram message ID for tracking
     table.boolean("delivered").notNullable().defaultTo(false);
     table.text("error_message").nullable();
+
+    // Composite primary key required by TimescaleDB hypertable on 'time' column
+    table.primary(["id", "time"]);
 
     // Indexes for efficient querying and time-series operations
     table.index(["subscription_id", "time"]);
