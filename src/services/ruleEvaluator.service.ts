@@ -42,6 +42,14 @@ export interface RuleEvaluationOutput {
   conditionResults: ConditionResult[];
   previewMode: boolean;
   evaluatedAt: string;
+  executedBy?: string;
+  executionContext?: string;
+}
+
+export interface EvaluationOptions {
+  previewMode?: boolean;
+  executedBy?: string;
+  executionContext?: string;
 }
 
 function evaluateCondition(
@@ -83,8 +91,9 @@ export class RuleEvaluatorService {
     input: RuleEvaluationInput,
     metrics: Record<string, number>,
     previousMetrics?: Record<string, number>,
-    previewMode = false
+    options: boolean | EvaluationOptions = false
   ): RuleEvaluationOutput {
+    const opts: EvaluationOptions = typeof options === "boolean" ? { previewMode: options } : options;
     this.validateConditions(input.conditions);
 
     const conditionResults: ConditionResult[] = input.conditions.map((cond) => {
@@ -114,12 +123,14 @@ export class RuleEvaluatorService {
       triggered,
       logicOperator: input.logicOperator,
       conditionResults,
-      previewMode,
+      previewMode: opts.previewMode ?? false,
       evaluatedAt: new Date().toISOString(),
+      executedBy: opts.executedBy ?? "system",
+      executionContext: opts.executionContext ?? "api",
     };
 
-    if (!previewMode) {
-      this.persistEvaluationLog(result, metrics).catch((err) =>
+    if (!result.previewMode) {
+      this.persistEvaluationLog(result, metrics, opts.executedBy, opts.executionContext).catch((err) =>
         logger.error({ err }, "Failed to persist rule evaluation log")
       );
     }
@@ -131,10 +142,11 @@ export class RuleEvaluatorService {
     inputs: RuleEvaluationInput[],
     metrics: Record<string, number>,
     previousMetrics?: Record<string, number>,
-    previewMode = false
+    options: boolean | EvaluationOptions = false
   ): RuleEvaluationOutput[] {
+    const opts: EvaluationOptions = typeof options === "boolean" ? { previewMode: options } : options;
     return inputs.map((input) =>
-      this.evaluate(input, metrics, previousMetrics, previewMode)
+      this.evaluate(input, metrics, previousMetrics, opts)
     );
   }
 
@@ -142,20 +154,58 @@ export class RuleEvaluatorService {
     ruleId?: string;
     assetCode?: string;
     triggered?: boolean;
+    executedBy?: string;
+    executionContext?: string;
+    from?: Date;
+    to?: Date;
     limit?: number;
     offset?: number;
-  } = {}): Promise<RuleEvaluationOutput[]> {
+  } = {}): Promise<{ evaluations: RuleEvaluationOutput[]; total: number }> {
     const db = getDatabase();
-    let query = db("rule_evaluator_logs").orderBy("evaluated_at", "desc");
+    const limit = Math.min(params.limit ?? 100, 1000);
+    const offset = params.offset ?? 0;
 
-    if (params.ruleId) query = query.where("rule_id", params.ruleId);
-    if (params.assetCode) query = query.where("asset_code", params.assetCode);
-    if (params.triggered !== undefined) query = query.where("triggered", params.triggered);
-    if (params.limit) query = query.limit(params.limit);
-    if (params.offset) query = query.offset(params.offset);
+    let query = db("rule_evaluator_logs");
+    let countQuery = db("rule_evaluator_logs");
 
-    const rows = await query;
-    return rows.map((r: Record<string, unknown>) => this.mapRow(r));
+    if (params.ruleId) {
+      query = query.where("rule_id", params.ruleId);
+      countQuery = countQuery.where("rule_id", params.ruleId);
+    }
+    if (params.assetCode) {
+      query = query.where("asset_code", params.assetCode);
+      countQuery = countQuery.where("asset_code", params.assetCode);
+    }
+    if (params.triggered !== undefined) {
+      query = query.where("triggered", params.triggered);
+      countQuery = countQuery.where("triggered", params.triggered);
+    }
+    if (params.executedBy) {
+      query = query.where("executed_by", params.executedBy);
+      countQuery = countQuery.where("executed_by", params.executedBy);
+    }
+    if (params.executionContext) {
+      query = query.where("execution_context", params.executionContext);
+      countQuery = countQuery.where("execution_context", params.executionContext);
+    }
+    if (params.from) {
+      query = query.where("evaluated_at", ">=", params.from);
+      countQuery = countQuery.where("evaluated_at", ">=", params.from);
+    }
+    if (params.to) {
+      query = query.where("evaluated_at", "<=", params.to);
+      countQuery = countQuery.where("evaluated_at", "<=", params.to);
+    }
+
+    const [rows, countResult] = await Promise.all([
+      query.orderBy("evaluated_at", "desc").limit(limit).offset(offset),
+      countQuery.count("id as count").first(),
+    ]);
+
+    return {
+      evaluations: rows.map((r: Record<string, unknown>) => this.mapRow(r)),
+      total: Number(countResult?.count ?? 0),
+    };
   }
 
   private validateConditions(conditions: RuleCondition[]): void {
@@ -172,7 +222,10 @@ export class RuleEvaluatorService {
 
   private async persistEvaluationLog(
     result: RuleEvaluationOutput,
-    metrics: Record<string, number>
+    metrics: Record<string, number>,
+    executedBy?: string,
+    executionContext?: string,
+    metadata?: Record<string, unknown>
   ): Promise<void> {
     const db = getDatabase();
     await db("rule_evaluator_logs").insert({
@@ -185,6 +238,9 @@ export class RuleEvaluatorService {
       triggered: result.triggered,
       logic_operator: result.logicOperator,
       preview_mode: result.previewMode,
+      executed_by: executedBy ?? "system",
+      execution_context: executionContext ?? "api",
+      metadata: metadata ? JSON.stringify(metadata) : "{}",
       evaluated_at: new Date(),
     });
   }
@@ -204,6 +260,8 @@ export class RuleEvaluatorService {
       conditionResults: evaluationResult?.conditionResults ?? [],
       previewMode: row.preview_mode as boolean,
       evaluatedAt: (row.evaluated_at as Date).toISOString(),
+      executedBy: (row.executed_by as string) ?? "system",
+      executionContext: (row.execution_context as string) ?? "api",
     };
   }
 }

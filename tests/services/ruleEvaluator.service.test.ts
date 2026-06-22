@@ -15,6 +15,7 @@ vi.mock("../../src/database/connection.js", () => ({
     b.first = vi.fn().mockResolvedValue(null);
     b.limit = vi.fn().mockReturnValue(b);
     b.offset = vi.fn().mockResolvedValue([]);
+    b.count = vi.fn().mockReturnValue(b);
     const fn = (_t: string) => b;
     return fn;
   }),
@@ -169,9 +170,27 @@ describe("RuleEvaluatorService", () => {
   });
 
   describe("getEvaluationHistory", () => {
-    it("returns empty array when no history exists", async () => {
+    it("returns empty paginated result when no history exists", async () => {
       const history = await service.getEvaluationHistory();
-      expect(history).toEqual([]);
+      expect(history).toEqual({ evaluations: [], total: 0 });
+    });
+  });
+
+  describe("actor tracking", () => {
+    it("includes executedBy and executionContext in evaluation output", () => {
+      const result = service.evaluate(
+        {
+          ruleName: "actor-test",
+          assetCode: "USDC",
+          conditions: [{ field: "price", operator: "gt", value: 100 }],
+          logicOperator: "AND",
+        },
+        { price: 150 },
+        undefined,
+        { executedBy: "user-1", executionContext: "manual" }
+      );
+      expect(result.executedBy).toBe("user-1");
+      expect(result.executionContext).toBe("manual");
     });
   });
 });
