@@ -27,7 +27,7 @@ export function handleSubscribe(
 
   // ── Validate channel name ─────────────────────────────────────────────────
   if (!(ALL_CHANNELS as string[]).includes(channel)) {
-    server.sendToClient(state, {
+    server.sendToClientState(state, {
       type: "error",
       message: `Unknown channel "${channel}". Valid channels: ${ALL_CHANNELS.join(", ")}.`,
       code: WsErrorCode.UNKNOWN_CHANNEL,
@@ -46,7 +46,7 @@ export function handleSubscribe(
       (token !== undefined && server.validateToken(token));
 
     if (!authenticated) {
-      server.sendToClient(state, {
+      server.sendToClientState(state, {
         type: "error",
         message: `Channel "${channel}" requires authentication. Provide a valid token.`,
         code: WsErrorCode.UNAUTHORIZED,
@@ -65,7 +65,7 @@ export function handleSubscribe(
   // ── Idempotent subscription ───────────────────────────────────────────────
   if (state.subscriptions.has(channel)) {
     // Re-send the ack so the client knows it's already subscribed.
-    server.sendToClient(state, {
+    server.sendToClientState(state, {
       type: "subscribed",
       channel,
       timestamp: now,
@@ -75,7 +75,7 @@ export function handleSubscribe(
 
   server.addSubscription(state, channel);
 
-  server.sendToClient(state, {
+  server.sendToClientState(state, {
     type: "subscribed",
     channel,
     timestamp: now,

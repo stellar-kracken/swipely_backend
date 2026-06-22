@@ -170,7 +170,7 @@ export class WebSocketServer implements IBroadcaster {
 
     // Send the welcome message so the client knows its assigned ID and the
     // available channels before it starts subscribing.
-    this.sendToClient(state, {
+    this.sendToClientState(state, {
       type: "welcome",
       clientId,
       channels: ALL_CHANNELS,
@@ -206,7 +206,7 @@ export class WebSocketServer implements IBroadcaster {
     }
 
     if (state.messageCount >= config.RATE_LIMIT_MAX) {
-      this.sendToClient(state, {
+      this.sendToClientState(state, {
         type: "error",
         message: "Rate limit exceeded. Reduce your message frequency.",
         code: WsErrorCode.RATE_LIMITED,
@@ -222,7 +222,7 @@ export class WebSocketServer implements IBroadcaster {
     try {
       message = JSON.parse(data.toString()) as InboundMessage;
     } catch {
-      this.sendToClient(state, {
+      this.sendToClientState(state, {
         type: "error",
         message: "Payload must be valid JSON.",
         code: WsErrorCode.INVALID_JSON,
@@ -249,7 +249,7 @@ export class WebSocketServer implements IBroadcaster {
         break;
       default: {
         const unknown = (message as { type: string }).type;
-        this.sendToClient(state, {
+        this.sendToClientState(state, {
           type: "error",
           message: `Unknown message type: "${unknown}"`,
           code: WsErrorCode.INVALID_MESSAGE,
@@ -277,10 +277,10 @@ export class WebSocketServer implements IBroadcaster {
   // ─── Outbound delivery ──────────────────────────────────────────────────────
 
   /**
-   * Serialise and send a typed message to a single client.
+   * Serialise and send a typed message to a single client by ClientState.
    * No-ops silently when the socket is no longer open.
    */
-  sendToClient(state: ClientState, message: OutboundMessage): void {
+  sendToClientState(state: ClientState, message: OutboundMessage): void {
     if (state.socket.readyState !== WS_OPEN) return;
 
     try {
@@ -289,6 +289,16 @@ export class WebSocketServer implements IBroadcaster {
     } catch (err) {
       logger.warn({ err, clientId: state.id }, "Failed to send WS message");
     }
+  }
+
+  /**
+   * Send a data message to a single client identified by their UUID.
+   * Implements {@link IBroadcaster}. No-ops when the client is not found.
+   */
+  sendToClient(clientId: string, message: OutboundDataMessage): void {
+    const state = this.clients.get(clientId);
+    if (!state) return;
+    this.sendToClientState(state, message);
   }
 
   /**

@@ -6,6 +6,7 @@ import { PricesChannel } from "./prices.channel.js";
 import { HealthChannel } from "./health.channel.js";
 import { AlertsChannel } from "./alerts.channel.js";
 import { BridgesChannel } from "./bridges.channel.js";
+import { EventsChannel } from "./events.channel.js";
 export { BaseChannel } from "./base.channel.js";
 
 // ─── ChannelManager ───────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ export class ChannelManager {
       ["health", new HealthChannel(broadcaster)],
       ["alerts", new AlertsChannel(broadcaster)],
       ["bridges", new BridgesChannel(broadcaster)],
+      ["events", new EventsChannel(broadcaster)],
     ]);
   }
 

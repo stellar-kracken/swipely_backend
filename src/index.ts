@@ -27,6 +27,7 @@ import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middl
 import { registerTracing } from "./api/middleware/tracing.js";
 import { getTelegramBotService } from "./services/telegram.bot.service.js";
 import { startOutboxSystem, stopOutboxSystem } from "./outbox/index.js";
+import { getEventFederationService } from "./services/eventFederation/index.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -221,6 +222,10 @@ async function start() {
     // Start outbox dispatcher (after all other systems are ready)
     await startOutboxSystem();
     server.log.info("Outbox dispatcher started");
+
+    // Start real-time event stream federation
+    await getEventFederationService().start();
+    server.log.info("Event federation service started");
   } catch (err) {
     server.log.error(err);
     process.exit(1);
@@ -229,6 +234,10 @@ async function start() {
   // ─── Graceful shutdown ──────────────────────────────────────────────────────
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "Shutdown signal received");
+
+    // Stop event federation first (gracefully drains in-flight events)
+    await getEventFederationService().stop();
+    logger.info("Event federation service stopped");
 
     // Stop outbox system first
     await stopOutboxSystem();
