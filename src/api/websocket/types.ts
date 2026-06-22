@@ -60,6 +60,11 @@ export interface IBroadcaster {
     channel: ChannelName,
     message: OutboundDataMessage
   ): Promise<void>;
+  /**
+   * Send a message to a single specific client by ID.
+   * No-ops silently when the client is not found or the socket is closed.
+   */
+  sendToClient(clientId: string, message: OutboundDataMessage): void;
 }
 
 // ─── Inbound messages (Client → Server) ───────────────────────────────────────

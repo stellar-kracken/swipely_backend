@@ -120,12 +120,8 @@ export class EventsChannel extends BaseChannel {
       timestamp: new Date().toISOString(),
     };
 
-    // Broadcast targets all subscribers; for a client-specific send we'd need
-    // direct socket access.  The broadcaster interface only exposes channel
-    // broadcast, so we emit to all subscribers — they will all receive the
-    // replay.  In practice this fires only at subscribe-time so the overlap
-    // window is tiny.
-    void clientId; // acknowledged — used for future direct-send optimisation
-    await this.broadcast(message as any);
+    // Send exclusively to the reconnecting client so existing subscribers
+    // are not spammed with a catch-up batch they don't need.
+    this.broadcaster.sendToClient(clientId, message as any);
   }
 }
