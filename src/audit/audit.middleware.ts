@@ -7,7 +7,7 @@ export const AuditMiddleware = async (request: FastifyRequest, reply: FastifyRep
   const actorType = (request as any).user?.role === "admin" ? "admin" : "user";
   
   // This will run after the request is processed to get the final status
-  reply.on('finish', async () => {
+  reply.raw.on('finish', async () => {
     // Basic automatic logging for important routes
     if (request.method !== "GET" && request.method !== "OPTIONS") {
       try {

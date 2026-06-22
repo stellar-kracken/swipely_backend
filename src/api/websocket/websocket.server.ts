@@ -280,7 +280,7 @@ export class WebSocketServer implements IBroadcaster {
    * Serialise and send a typed message to a single client by ClientState.
    * No-ops silently when the socket is no longer open.
    */
-  private sendToClientState(state: ClientState, message: OutboundMessage): void {
+  sendToClientState(state: ClientState, message: OutboundMessage): void {
     if (state.socket.readyState !== WS_OPEN) return;
 
     try {

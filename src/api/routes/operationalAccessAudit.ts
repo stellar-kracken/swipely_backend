@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { db } from "../../db/index.js";
+import { getDatabase } from "../../database/connection.js";
 
 export async function operationalAccessAuditRoutes(server: FastifyInstance) {
   server.get("/entries", {
@@ -21,13 +21,13 @@ export async function operationalAccessAuditRoutes(server: FastifyInstance) {
     const { page = 1, limit = 50, role, action } = request.query as Record<string, any>;
     const offset = (page - 1) * limit;
 
-    let query = db("audit_logs").orderBy("created_at", "desc").limit(limit).offset(offset);
+    let query = getDatabase()("audit_logs").orderBy("created_at", "desc").limit(limit).offset(offset);
     if (role) query = query.where("role", role);
     if (action) query = query.where("action", action);
 
     const [entries, [{ count }]] = await Promise.all([
       query,
-      db("audit_logs").count("* as count"),
+      getDatabase()("audit_logs").count("* as count"),
     ]);
 
     return { entries, total: Number(count), page, limit };
@@ -41,9 +41,9 @@ export async function operationalAccessAuditRoutes(server: FastifyInstance) {
     },
   }, async () => {
     const [total, byRole, byAction] = await Promise.all([
-      db("audit_logs").count("* as count").first(),
-      db("audit_logs").select("role").count("* as count").groupBy("role").orderBy("count", "desc"),
-      db("audit_logs").select("action").count("* as count").groupBy("action").orderBy("count", "desc"),
+      getDatabase()("audit_logs").count("* as count").first(),
+      getDatabase()("audit_logs").select("role").count("* as count").groupBy("role").orderBy("count", "desc"),
+      getDatabase()("audit_logs").select("action").count("* as count").groupBy("action").orderBy("count", "desc"),
     ]);
 
     return {
@@ -60,7 +60,7 @@ export async function operationalAccessAuditRoutes(server: FastifyInstance) {
       response: { 200: { type: "object", additionalProperties: true } },
     },
   }, async () => {
-    const members = await db("role_assignments")
+    const members = await getDatabase()("role_assignments")
       .select("*")
       .orderBy("assigned_at", "desc");
 
@@ -82,7 +82,7 @@ export async function operationalAccessAuditRoutes(server: FastifyInstance) {
   }, async (request) => {
     const { status = "all" } = request.query as Record<string, any>;
 
-    let query = db("admin_sessions").select("*").orderBy("created_at", "desc");
+    let query = getDatabase()("admin_sessions").select("*").orderBy("created_at", "desc");
     if (status !== "all") query = query.where("status", status);
 
     const sessions = await query;
@@ -103,10 +103,11 @@ export async function operationalAccessAuditRoutes(server: FastifyInstance) {
   }, async (request, reply) => {
     const apiKey = (request.headers as Record<string, string>)["x-api-key"];
     if (!apiKey || apiKey !== process.env.ADMIN_EXPORT_API_KEY) {
-      return reply.code(401).send({ error: "Unauthorized" });
+      reply.statusCode = 401;
+      return { error: "Unauthorized" };
     }
 
-    const entries = await db("audit_logs").select("*").orderBy("created_at", "desc").limit(10000);
+    const entries = await getDatabase()("audit_logs").select("*").orderBy("created_at", "desc").limit(10000);
 
     const header = "id,action,role,actor,target,created_at\n";
     const rows = entries
