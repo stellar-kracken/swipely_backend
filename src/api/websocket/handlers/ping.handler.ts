@@ -12,7 +12,7 @@ export function handlePing(
   state: ClientState,
   server: WebSocketServer
 ): void {
-  server.sendToClient(state, {
+  server.sendToClientState(state, {
     type: "pong",
     timestamp: new Date().toISOString(),
   });

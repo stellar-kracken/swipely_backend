@@ -22,7 +22,7 @@ export function handleUnsubscribe(
   const now = new Date().toISOString();
 
   if (!(ALL_CHANNELS as string[]).includes(channel)) {
-    server.sendToClient(state, {
+    server.sendToClientState(state, {
       type: "error",
       message: `Unknown channel "${channel}".`,
       code: WsErrorCode.UNKNOWN_CHANNEL,
@@ -33,7 +33,7 @@ export function handleUnsubscribe(
 
   server.removeSubscription(state, channel);
 
-  server.sendToClient(state, {
+  server.sendToClientState(state, {
     type: "unsubscribed",
     channel,
     timestamp: now,
