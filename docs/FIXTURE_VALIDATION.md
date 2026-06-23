@@ -1,5 +1,7 @@
 # API Fixture Validation
 
+> **See also:** [Fixture Audit Report](../../docs/FIXTURE_AUDIT_REPORT.md) for the full inventory of reusable test fixtures, ownership, and CI alignment across the monorepo.
+
 Test fixtures (the static JSON payloads under `e2e/fixtures/`) are easy to forget
 when an API response shape changes. When they drift, tests pass against payloads
 that no longer resemble what the API actually returns. The fixture validator
@@ -63,3 +65,13 @@ will fail if a fixture drifts.
 
 That's it — the new fixture is now covered by both the CLI check and the test
 suite.
+
+## Relationship to E2E runtime mocks
+
+The JSON files in `e2e/fixtures/` are validated against API schemas in CI, but
+Playwright E2E tests currently build mocked responses from programmatic factories
+in `frontend/src/test/factories.ts` via `e2e/utils/mockApi.ts` — they do not
+load the JSON files directly. When updating fixtures, align both the JSON
+payloads and the E2E factory defaults, or consult the
+[Fixture Audit Report](../../docs/FIXTURE_AUDIT_REPORT.md) for the current
+consolidation plan.
