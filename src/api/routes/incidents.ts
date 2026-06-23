@@ -1,7 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { escalationService } from "../../services/escalation.service";
+import { IncidentService } from "../../services/incident.service.js";
 
 export async function incidentsRoutes(server: FastifyInstance) {
+  const incidentService = new IncidentService();
+
   // Create incident
   server.post("/", async (request, reply) => {
     const incident = await escalationService.createIncident(
@@ -96,5 +99,24 @@ export async function incidentsRoutes(server: FastifyInstance) {
   server.post("/engine/stop", async (_request, reply) => {
     escalationService.stopEngine();
     return reply.code(200).send({ message: "Escalation engine stopped" });
+  });
+
+  // Heatmap data
+  server.get<{
+    Querystring: {
+      startDate?: string;
+      endDate?: string;
+      assetSymbol?: string;
+    };
+  }>("/heatmap", async (request, reply) => {
+    const { startDate, endDate, assetSymbol } = request.query;
+
+    const heatmap = await incidentService.getHeatmapData({
+      startDate,
+      endDate,
+      assetSymbol,
+    });
+
+    return heatmap;
   });
 }

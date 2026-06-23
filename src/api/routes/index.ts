@@ -1,7 +1,4 @@
 import type { FastifyInstance } from "fastify";
-import { assetsRoutes } from "./assets.js";
-import { bridgesRoutes } from "./bridges.js";
-import { websocketRoutes } from "./websocket.js";
 import { alertsRoutes } from "./alerts.routes.js";
 import { alertHistoryRoutes } from "./alertHistory.routes.js";
 import { exportsRoutes } from "./exports.js";
@@ -69,6 +66,9 @@ import { anomalyDetectionRoutes } from "./anomalyDetection.routes.js";
 import { liquidityFragmentationRoutes } from "./liquidityFragmentation.routes.js";
 import { operationalAccessAuditRoutes } from "./operationalAccessAudit.js";
 import { ownershipMatrixRoutes } from "./ownershipMatrix.js";
+import { operatorNotesRoutes } from "./notes.js";
+import { incidentsRoutes } from "./incidents.js";
+import { tagsRoutes } from "./tags.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -90,7 +90,6 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(watchlistsRoutes, { prefix: "/api/v1/watchlists" });
   server.register(cacheRoutes, { prefix: "/api/v1/cache" });
   server.register(healthRoutes, { prefix: "/api/v1/health" });
-  // Backward-compatible health endpoints for load tests and probes
   server.register(healthRoutes, { prefix: "/health" });
   server.register(rateLimitAdminRoutes, { prefix: "/api/v1/admin/rate-limit" });
   server.register(tracingAdminRoutes, { prefix: "/api/v1/admin/tracing" });
@@ -113,9 +112,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(auditRoutes, { prefix: "/api/v1/admin/audit" });
   server.register(bridgeRegistryRoutes, { prefix: "/api/v1/bridge-registry" });
   server.register(incidentRoutes, { prefix: "/api/v1/incidents" });
-  // Incident correlation endpoints (suggestions, manual link/unlink, approve)
   server.register(incidentCorrelationRoutes, { prefix: "/api/v1/incidents" });
-  // Usage metrics admin endpoints
   server.register(usageMetricsRoutes, { prefix: "/api/v1" });
   server.register(healthScoreHistoryRoutes, {
     prefix: "/api/v1/health-score-history",
@@ -174,4 +171,7 @@ export async function registerRoutes(server: FastifyInstance) {
     prefix: "/api/v1/admin/access-audit",
   });
   server.register(ownershipMatrixRoutes, { prefix: "/api/v1" });
+  server.register(operatorNotesRoutes, { prefix: "/api/v1/notes" });
+  server.register(incidentsRoutes, { prefix: "/api/v1/incidents-heatmap" });
+  server.register(tagsRoutes, { prefix: "/api/v1/tags" });
 }
