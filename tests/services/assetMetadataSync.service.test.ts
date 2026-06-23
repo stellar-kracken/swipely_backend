@@ -11,50 +11,63 @@ const {
   getMetadataMock,
   validateMetadataMock,
   setManualOverrideMock,
-} = vi.hoisted(() => ({
-  insertMock: vi.fn().mockResolvedValue(undefined),
-  updateMock: vi.fn().mockResolvedValue(1),
-  orderByMock: vi.fn(),
-  firstMock: vi.fn(),
-  upsertMetadataMock: vi.fn(),
-  getMetadataMock: vi.fn(),
-  validateMetadataMock: vi.fn(),
-  setManualOverrideMock: vi.fn(),
-}));
+  dbMock,
+} = vi.hoisted(() => {
+  const insertMock = vi.fn().mockResolvedValue(undefined);
+  const updateMock = vi.fn().mockResolvedValue(1);
+  const orderByMock = vi.fn();
+  const firstMock = vi.fn();
+  const upsertMetadataMock = vi.fn();
+  const getMetadataMock = vi.fn();
+  const validateMetadataMock = vi.fn();
+  const setManualOverrideMock = vi.fn();
 
-const dbMock = vi.fn((table: string) => {
-  if (table === "assets") {
-    return {
-      select: vi.fn().mockReturnThis(),
-      modify: vi.fn().mockReturnThis(),
-      orderBy: vi.fn().mockResolvedValue([
-        { id: "asset-1", symbol: "USDC" },
-      ]),
-    };
-  }
+  const dbMock = vi.fn((table: string) => {
+    if (table === "assets") {
+      return {
+        select: vi.fn().mockReturnThis(),
+        modify: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockResolvedValue([
+          { id: "asset-1", symbol: "USDC" },
+        ]),
+      };
+    }
 
-  if (table === "asset_metadata_sync_runs") {
-    return {
-      insert: insertMock,
-      where: vi.fn().mockReturnThis(),
-      orderBy: orderByMock.mockReturnThis(),
-      limit: vi.fn().mockResolvedValue([]),
-    };
-  }
+    if (table === "asset_metadata_sync_runs") {
+      return {
+        insert: insertMock,
+        where: vi.fn().mockReturnThis(),
+        orderBy: orderByMock.mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
+      };
+    }
 
-  if (table === "asset_metadata") {
+    if (table === "asset_metadata") {
+      return {
+        where: vi.fn().mockReturnThis(),
+        update: updateMock,
+        first: firstMock,
+      };
+    }
+
     return {
       where: vi.fn().mockReturnThis(),
       update: updateMock,
+      insert: insertMock,
       first: firstMock,
     };
-  }
+  });
 
   return {
-    where: vi.fn().mockReturnThis(),
-    update: updateMock,
-    insert: insertMock,
-    first: firstMock,
+    insertMock,
+    updateMock,
+    orderByMock,
+    firstMock,
+    upsertMetadataMock,
+    getMetadataMock,
+    validateMetadataMock,
+    setManualOverrideMock,
+    dbMock,
   };
 });
 

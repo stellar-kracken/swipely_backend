@@ -68,6 +68,7 @@ import { provenanceRoutes } from "./provenance.routes.js";
 import { anomalyDetectionRoutes } from "./anomalyDetection.routes.js";
 import { liquidityFragmentationRoutes } from "./liquidityFragmentation.routes.js";
 import { operationalAccessAuditRoutes } from "./operationalAccessAudit.js";
+import { ownershipMatrixRoutes } from "./ownershipMatrix.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -172,4 +173,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(operationalAccessAuditRoutes, {
     prefix: "/api/v1/admin/access-audit",
   });
+  server.register(ownershipMatrixRoutes, { prefix: "/api/v1" });
 }

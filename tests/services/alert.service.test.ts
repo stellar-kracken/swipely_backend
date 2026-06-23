@@ -5,6 +5,7 @@ import {
   type MetricSnapshot,
 } from "../../src/services/alert.service.js";
 import { alertRoutingService } from "../../src/services/alertRouting.service.js";
+import { duplicateAlertCheckService } from "../../src/services/duplicateAlertCheck.service.js";
 
 vi.mock("../../src/services/alertRouting.service.js", () => ({
   alertRoutingService: {
@@ -80,6 +81,7 @@ describe("AlertService — evaluateConditions (via evaluateAsset)", () => {
   let service: AlertService;
 
   beforeEach(() => {
+    vi.spyOn(duplicateAlertCheckService, "check").mockReturnValue({ isDuplicate: false, action: "allow" });
     suppressionServiceMock.shouldSuppress.mockResolvedValue({
       suppressed: false,
       matchedRule: null,

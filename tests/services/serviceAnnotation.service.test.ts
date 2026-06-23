@@ -21,7 +21,8 @@ const returningRow = {
 
 vi.mock("../../src/database/connection.js", () => ({
   getDatabase: vi.fn(() => {
-    const b: Record<string, unknown> = {};
+    const b: any = {};
+    b.then = (resolve: any) => Promise.resolve([]).then(resolve);
     b.where = vi.fn().mockReturnValue(b);
     b.orderBy = vi.fn().mockReturnValue(b);
     b.insert = vi.fn().mockReturnValue(b);

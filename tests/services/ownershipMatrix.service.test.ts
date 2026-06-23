@@ -2,28 +2,50 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { OwnershipMatrixService } from "../../src/services/ownershipMatrix.service.js";
 
 // Mock dependencies
-const mockDb = {
-  transaction: vi.fn(),
-  where: vi.fn(),
-  first: vi.fn(),
-  insert: vi.fn(),
-  update: vi.fn(),
-  delete: vi.fn(),
-  returning: vi.fn(),
-  join: vi.fn(),
-  select: vi.fn(),
-  orderBy: vi.fn(),
-  limit: vi.fn(),
-  offset: vi.fn(),
-  count: vi.fn(),
-  whereIn: vi.fn(),
-  fn: { now: vi.fn(() => new Date()) },
-};
+const { mockDb, mockAuditService, queryBuilder } = vi.hoisted(() => {
+  const queryBuilder: any = {};
+  queryBuilder.where = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.join = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.select = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.orderBy = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.limit = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.offset = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.count = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.whereIn = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.insert = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.update = vi.fn().mockReturnValue(queryBuilder);
+  queryBuilder.returning = vi.fn().mockResolvedValue([]);
+  queryBuilder.first = vi.fn().mockResolvedValue(null);
+  queryBuilder.delete = vi.fn().mockResolvedValue(1);
 
-const mockAuditService = {
-  log: vi.fn(),
-  query: vi.fn(),
-};
+  const dbFunc = vi.fn().mockImplementation(() => queryBuilder);
+  
+  Object.assign(dbFunc, queryBuilder);
+  dbFunc.transaction = vi.fn();
+  dbFunc.fn = { now: vi.fn(() => new Date()) };
+
+  queryBuilder.transaction = dbFunc.transaction;
+  queryBuilder.fn = dbFunc.fn;
+
+  return {
+    mockDb: dbFunc,
+    mockAuditService: {
+      log: vi.fn(),
+      query: vi.fn(),
+    },
+    queryBuilder,
+  };
+});
+
+function createMockTrx(overrides: any) {
+  const trxQueryBuilder = {
+    ...queryBuilder,
+    ...overrides,
+  };
+  const trx = vi.fn().mockImplementation(() => trxQueryBuilder);
+  Object.assign(trx, trxQueryBuilder);
+  return trx;
+}
 
 vi.mock("../../src/database/connection.js", () => ({
   getDatabase: () => mockDb,
@@ -40,6 +62,8 @@ describe("OwnershipMatrixService", () => {
     service = new OwnershipMatrixService();
     vi.clearAllMocks();
 
+    mockDb.mockImplementation(() => queryBuilder);
+
     // Setup default mock chain
     mockDb.where.mockReturnThis();
     mockDb.join.mockReturnThis();
@@ -52,6 +76,7 @@ describe("OwnershipMatrixService", () => {
     mockDb.insert.mockReturnThis();
     mockDb.update.mockReturnThis();
     mockDb.returning.mockResolvedValue([]);
+    mockDb.first.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -76,13 +101,12 @@ describe("OwnershipMatrixService", () => {
       };
 
       mockDb.transaction.mockImplementation(async (callback) => {
-        const trx = {
-          ...mockDb,
+        const trx = createMockTrx({
           where: vi.fn().mockReturnThis(),
           first: vi.fn().mockResolvedValueOnce(null), // No existing ownership
           insert: vi.fn().mockReturnThis(),
           returning: vi.fn().mockResolvedValue([mockOwnership]),
-        };
+        });
         return callback(trx);
       });
 
@@ -127,13 +151,12 @@ describe("OwnershipMatrixService", () => {
       };
 
       mockDb.transaction.mockImplementation(async (callback) => {
-        const trx = {
-          ...mockDb,
+        const trx = createMockTrx({
           where: vi.fn().mockReturnThis(),
           first: vi.fn().mockResolvedValueOnce(existingOwnership),
           update: vi.fn().mockReturnThis(),
           returning: vi.fn().mockResolvedValue([updatedOwnership]),
-        };
+        });
         return callback(trx);
       });
 
@@ -187,13 +210,12 @@ describe("OwnershipMatrixService", () => {
       };
 
       mockDb.transaction.mockImplementation(async (callback) => {
-        const trx = {
-          ...mockDb,
+        const trx = createMockTrx({
           where: vi.fn().mockReturnThis(),
           first: vi.fn().mockResolvedValueOnce(null), // No existing contact
           insert: vi.fn().mockReturnThis(),
           returning: vi.fn().mockResolvedValue([mockContact]),
-        };
+        });
         return callback(trx);
       });
 
@@ -229,11 +251,10 @@ describe("OwnershipMatrixService", () => {
       };
 
       mockDb.transaction.mockImplementation(async (callback) => {
-        const trx = {
-          ...mockDb,
+        const trx = createMockTrx({
           where: vi.fn().mockReturnThis(),
           first: vi.fn().mockResolvedValueOnce(existingContact),
-        };
+        });
         return callback(trx);
       });
 
@@ -387,7 +408,16 @@ describe("OwnershipMatrixService", () => {
       mockDb.where.mockReturnThis();
       mockDb.join.mockReturnThis();
       mockDb.select.mockReturnThis();
-      mockDb.orderBy.mockReturnThis();
+
+      let orderByCallCount = 0;
+      mockDb.orderBy.mockImplementation(() => {
+        orderByCallCount++;
+        if (orderByCallCount === 1) {
+          return queryBuilder;
+        }
+        return Promise.resolve([]);
+      });
+
       mockDb.limit.mockReturnThis();
       mockDb.offset.mockResolvedValue(mockResults);
 
@@ -395,7 +425,6 @@ describe("OwnershipMatrixService", () => {
       mockDb.first.mockResolvedValue({ count: 1 });
 
       mockDb.whereIn.mockReturnThis();
-      mockDb.orderBy.mockResolvedValue([]);
 
       const result = await service.searchOwnership(query, { page: 1, limit: 50 });
 

@@ -52,7 +52,7 @@ describe("Ownership Matrix API", () => {
 
   describe("POST /api/v1/alerts/:alertId/ownership", () => {
     it("should assign ownership and return 200", async () => {
-      const alertId = "alert-123";
+      const alertId = "123e4567-e89b-12d3-a456-426614174000";
       const mockOwnership = {
         id: "ownership-1",
         alertId,
@@ -90,7 +90,7 @@ describe("Ownership Matrix API", () => {
 
       const response = await server.inject({
         method: "POST",
-        url: "/api/v1/alerts/invalid-alert/ownership",
+        url: "/api/v1/alerts/00000000-0000-0000-0000-000000000000/ownership",
         payload: {
           ownerId: "owner-456",
           ownerType: "user",
@@ -104,7 +104,7 @@ describe("Ownership Matrix API", () => {
     it("should return 400 for malformed request", async () => {
       const response = await server.inject({
         method: "POST",
-        url: "/api/v1/alerts/alert-123/ownership",
+        url: "/api/v1/alerts/123e4567-e89b-12d3-a456-426614174000/ownership",
         payload: {
           // Missing required fields
           ownerId: "owner-456",
@@ -117,7 +117,7 @@ describe("Ownership Matrix API", () => {
 
   describe("GET /api/v1/alerts/:alertId/ownership", () => {
     it("should return current owner", async () => {
-      const alertId = "alert-123";
+      const alertId = "123e4567-e89b-12d3-a456-426614174000";
       const mockOwnership = {
         id: "ownership-1",
         alertId,
@@ -144,7 +144,7 @@ describe("Ownership Matrix API", () => {
 
       const response = await server.inject({
         method: "GET",
-        url: "/api/v1/alerts/alert-123/ownership",
+        url: "/api/v1/alerts/123e4567-e89b-12d3-a456-426614174000/ownership",
       });
 
       expect(response.statusCode).toBe(200);
@@ -191,7 +191,7 @@ describe("Ownership Matrix API", () => {
 
   describe("POST /api/v1/alerts/:alertId/escalation", () => {
     it("should add escalation contact and return 201", async () => {
-      const alertId = "alert-123";
+      const alertId = "123e4567-e89b-12d3-a456-426614174000";
       const mockContact = {
         id: "contact-1",
         alertId,
@@ -221,7 +221,7 @@ describe("Ownership Matrix API", () => {
 
   describe("GET /api/v1/alerts/:alertId/escalation", () => {
     it("should return escalation contacts in order", async () => {
-      const alertId = "alert-123";
+      const alertId = "123e4567-e89b-12d3-a456-426614174000";
       const mockContacts = [
         {
           id: "c1",
@@ -261,7 +261,7 @@ describe("Ownership Matrix API", () => {
 
       const response = await server.inject({
         method: "DELETE",
-        url: "/api/v1/alerts/alert-123/escalation/contact-456",
+        url: "/api/v1/alerts/123e4567-e89b-12d3-a456-426614174000/escalation/contact-456",
         payload: {
           actorId: "actor-789",
         },
@@ -277,7 +277,7 @@ describe("Ownership Matrix API", () => {
 
       const response = await server.inject({
         method: "DELETE",
-        url: "/api/v1/alerts/alert-123/escalation/contact-456",
+        url: "/api/v1/alerts/123e4567-e89b-12d3-a456-426614174000/escalation/contact-456",
         payload: {
           actorId: "actor-789",
         },
@@ -313,7 +313,7 @@ describe("Ownership Matrix API", () => {
 
       const response = await server.inject({
         method: "GET",
-        url: "/api/v1/alerts/alert-123/ownership/history?page=1&limit=50",
+        url: "/api/v1/alerts/123e4567-e89b-12d3-a456-426614174000/ownership/history?page=1&limit=50",
       });
 
       expect(response.statusCode).toBe(200);
@@ -421,7 +421,7 @@ describe("Ownership Matrix API", () => {
       // Verify we can only read, not modify
       const getResponse = await server.inject({
         method: "GET",
-        url: "/api/v1/alerts/alert-123/ownership/history",
+        url: "/api/v1/alerts/123e4567-e89b-12d3-a456-426614174000/ownership/history",
       });
 
       expect(getResponse.statusCode).toBe(200);
@@ -429,7 +429,7 @@ describe("Ownership Matrix API", () => {
       // Attempt to modify (should fail - no such endpoint exists)
       const putResponse = await server.inject({
         method: "PUT",
-        url: "/api/v1/alerts/alert-123/ownership/history/audit-1",
+        url: "/api/v1/alerts/123e4567-e89b-12d3-a456-426614174000/ownership/history/audit-1",
         payload: { action: "modified" },
       });
 
@@ -437,7 +437,7 @@ describe("Ownership Matrix API", () => {
 
       const deleteResponse = await server.inject({
         method: "DELETE",
-        url: "/api/v1/alerts/alert-123/ownership/history/audit-1",
+        url: "/api/v1/alerts/123e4567-e89b-12d3-a456-426614174000/ownership/history/audit-1",
       });
 
       expect(deleteResponse.statusCode).toBe(404); // Route not found

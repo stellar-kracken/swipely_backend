@@ -12,5 +12,6 @@ export default defineConfig({
       "tests/jobs/**/*.test.ts",
       "tests/testing/**/*.test.ts",
     ],
+    fileParallelism: false,
   },
 });

@@ -7,13 +7,26 @@ vi.mock("../../src/utils/logger.js", () => ({
 
 vi.mock("../../src/database/connection.js", () => ({
   getDatabase: vi.fn(() => {
-    const b: Record<string, unknown> = {};
-    b.where = vi.fn().mockReturnValue(b);
+    const b: any = {};
+    let queryId: string | null = null;
+    b.then = (resolve: any) => Promise.resolve([]).then(resolve);
+    b.where = vi.fn().mockImplementation((key, val) => {
+      if (key === "id" || key === "window_id") {
+        queryId = val;
+      }
+      return b;
+    });
     b.orderBy = vi.fn().mockReturnValue(b);
     b.insert = vi.fn().mockReturnValue(b);
     b.update = vi.fn().mockReturnValue(b);
-    b.first = vi.fn().mockResolvedValue(null);
-    b.returning = vi.fn().mockResolvedValue([]);
+    b.first = vi.fn().mockImplementation(async () => {
+      if (queryId === "nonexistent") return null;
+      return { id: "window-1", asset_code: "USDC", alert_type: "price_deviation", alert_count: 1, summary_stats: "{}" };
+    });
+    b.returning = vi.fn().mockImplementation(async () => {
+      if (queryId === "nonexistent") return [];
+      return [{ id: "window-1", asset_code: "USDC", alert_type: "price_deviation", alert_count: 1, summary_stats: "{}" }];
+    });
     b.limit = vi.fn().mockReturnValue(b);
     b.offset = vi.fn().mockResolvedValue([]);
     const fn = (_t: string) => b;
