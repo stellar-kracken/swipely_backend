@@ -11,8 +11,8 @@ FROM node:20-alpine AS base
 WORKDIR /app
 
 # Install dependencies first (layer cache friendly)
-COPY package.json package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+COPY package.json ./
+RUN npm install
 
 # -----------------------------------------------------------------------------
 # Development — live reload via tsx watch
@@ -39,8 +39,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY package.json package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi && npm cache clean --force
+COPY package.json ./
+RUN npm install --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 
