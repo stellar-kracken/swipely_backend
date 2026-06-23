@@ -83,6 +83,7 @@ import { metricsAggregationRoutes } from "./metricsAggregation.routes.js";
 import { eventReplayRoutes } from "./eventReplay.routes.js";
 import { sourceDecommissionRoutes } from "./sourceDecommission.routes.js";
 import { providerCircuitBreakerRoutes } from "./providerCircuitBreaker.routes.js";
+import { crossChainVerificationRoutes } from "./crossChainVerification.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -200,4 +201,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(eventReplayRoutes, { prefix: "/api/v1/events/replay" });
   server.register(sourceDecommissionRoutes, { prefix: "/api/v1/sources/decommission" });
   server.register(providerCircuitBreakerRoutes, { prefix: "/api/v1/providers/circuit-breaker" });
+  server.register(crossChainVerificationRoutes, {
+    prefix: "/api/v1/cross-chain-verification",
+  });
 }
