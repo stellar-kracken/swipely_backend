@@ -73,6 +73,7 @@ import { operatorNotesRoutes } from "./notes.js";
 import { incidentsRoutes } from "./incidents.js";
 import { tagsRoutes } from "./tags.js";
 import { savedMetricsRoutes } from "./savedMetrics.routes.js";
+import { playbooksRoutes } from "./playbooks.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -179,4 +180,5 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(operatorNotesRoutes, { prefix: "/api/v1/notes" });
   server.register(incidentsRoutes, { prefix: "/api/v1/incidents-heatmap" });
   server.register(tagsRoutes, { prefix: "/api/v1/tags" });
+  server.register(playbooksRoutes, { prefix: "/api/v1/playbooks" });
 }
