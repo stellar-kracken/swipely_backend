@@ -72,6 +72,7 @@ import { ownershipMatrixRoutes } from "./ownershipMatrix.js";
 import { operatorNotesRoutes } from "./notes.js";
 import { incidentsRoutes } from "./incidents.js";
 import { tagsRoutes } from "./tags.js";
+import { savedMetricsRoutes } from "./savedMetrics.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -90,6 +91,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(aggregationRoutes, { prefix: "/api/v1/aggregation" });
   server.register(metadataRoutes, { prefix: "/api/v1/metadata" });
   server.register(analyticsRoutes, { prefix: "/api/v1/analytics" });
+  server.register(savedMetricsRoutes, { prefix: "/api/v1/analytics/saved-metrics" });
   server.register(watchlistsRoutes, { prefix: "/api/v1/watchlists" });
   server.register(cacheRoutes, { prefix: "/api/v1/cache" });
   server.register(healthRoutes, { prefix: "/api/v1/health" });
