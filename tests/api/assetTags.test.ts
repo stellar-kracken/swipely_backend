@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it, vi, beforeEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 
+vi.hoisted(() => {
+  process.env.NODE_ENV = "test";
+  process.env.API_KEY_BOOTSTRAP_TOKEN = "bootstrap-secret";
+});
+
+import { buildServer } from "../../src/index.js";
+
 const assetTagServiceMocks = vi.hoisted(() => ({
   getAllTags: vi.fn(),
   getTagById: vi.fn(),
@@ -33,9 +40,6 @@ describe("Asset Tags API", () => {
   let server: FastifyInstance;
 
   beforeAll(async () => {
-    process.env.NODE_ENV = "test";
-    process.env.API_KEY_BOOTSTRAP_TOKEN = "bootstrap-secret";
-    const { buildServer } = await import("../../src/index.js");
     server = await buildServer();
   });
 

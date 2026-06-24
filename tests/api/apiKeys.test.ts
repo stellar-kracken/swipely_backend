@@ -1,13 +1,17 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+
+vi.hoisted(() => {
+  process.env.NODE_ENV = "test";
+  process.env.API_KEY_BOOTSTRAP_TOKEN = "bootstrap-secret";
+});
+
+import { buildServer } from "../../src/index.js";
 
 describe("API key routes", () => {
   let server: FastifyInstance;
 
   beforeAll(async () => {
-    process.env.NODE_ENV = "test";
-    process.env.API_KEY_BOOTSTRAP_TOKEN = "bootstrap-secret";
-    const { buildServer } = await import("../../src/index.js");
     server = await buildServer();
   });
 

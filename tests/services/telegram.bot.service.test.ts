@@ -3,6 +3,38 @@ import Redis from "ioredis";
 import { TelegramBotService, AlertEvent } from "../../src/services/telegram.bot.service.js";
 import { escapeTelegramMarkdown, formatAlertMessage } from "../../src/services/formatters/telegram.formatter.js";
 
+// Mock telegraf to prevent network requests
+vi.mock("telegraf", () => {
+  const mockTelegram = {
+    sendMessage: vi.fn().mockResolvedValue({}),
+    setWebhook: vi.fn().mockResolvedValue(true),
+    getWebhookInfo: vi.fn().mockResolvedValue({ url: "", pending_update_count: 0 }),
+    deleteWebhook: vi.fn().mockResolvedValue(true),
+    getMe: vi.fn().mockResolvedValue({ username: "test_bot", id: 123456 }),
+  };
+
+  class BotMock {
+    telegram = mockTelegram;
+    use = vi.fn();
+    command = vi.fn();
+    action = vi.fn();
+    stop = vi.fn().mockResolvedValue(true);
+    webhookCallback = vi.fn().mockReturnValue(() => {});
+  }
+
+  return {
+    Telegraf: BotMock,
+    Context: class {},
+    Markup: {
+      inlineKeyboard: vi.fn().mockReturnValue({}),
+      button: {
+        callback: vi.fn().mockReturnValue({}),
+      },
+    },
+  };
+});
+
+
 // Mock configuration
 vi.mock("../../src/config/index.js", () => ({
   config: {
