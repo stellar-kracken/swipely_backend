@@ -62,6 +62,7 @@ import { alertWindowingRoutes } from "./alertWindowing.routes.js";
 import { queryPresetsRoutes } from "./queryPresets.js";
 import { duplicateAlertCheckRoutes } from "./duplicateAlertCheck.routes.js";
 import { freshnessRoutes } from "./freshness.js";
+import { assetFreshnessRoutes } from "./assetFreshness.routes.js";
 import { providerAllowlistRoutes } from "./providerAllowlist.routes.js";
 import { providerAllowlistAdminRoutes } from "./providerAllowlistAdmin.routes.js";
 import { provenanceRoutes } from "./provenance.routes.js";
@@ -147,6 +148,8 @@ export async function registerRoutes(server: FastifyInstance) {
     prefix: "/api/v1/metrics/external-rate-limits",
   });
   server.register(freshnessRoutes, { prefix: "/api/v1/freshness" });
+  // Asset-scoped freshness endpoints
+  server.register(assetFreshnessRoutes, { prefix: "/api/v1/freshness/assets" });
   server.register(eventSubscriptionFilterRoutes, {
     prefix: "/api/v1/event-subscriptions",
   });
