@@ -65,6 +65,21 @@ export interface CreateIncidentPayload {
   occurredAt?: string;
 }
 
+export interface HeatmapBucket {
+  date: string;
+  hour: number;
+  count: number;
+  bySeverity: Record<string, number>;
+  incidents: BridgeIncident[];
+}
+
+export interface HeatmapData {
+  buckets: HeatmapBucket[];
+  totalIncidents: number;
+  dateRange: { start: string; end: string };
+  assets: string[];
+}
+
 export class IncidentService {
   private db = getDatabase();
 
@@ -186,6 +201,73 @@ export class IncidentService {
       .whereNull("r.id")
       .count<[{ count: string }]>("i.id as count");
     return Number(count);
+  }
+
+  async getHeatmapData(params: {
+    startDate?: string;
+    endDate?: string;
+    assetSymbol?: string;
+  }): Promise<HeatmapData> {
+    const now = new Date();
+    const defaultStart = new Date(now);
+    defaultStart.setDate(defaultStart.getDate() - 30);
+
+    const startDate = params.startDate ?? defaultStart.toISOString();
+    const endDate = params.endDate ?? now.toISOString();
+
+    const filters: IncidentFilters = {
+      assetCode: params.assetSymbol,
+      limit: 10000,
+    };
+
+    const { incidents } = await this.listIncidents(filters);
+
+    const filtered = incidents.filter((inc) => {
+      const occurred = new Date(inc.occurredAt);
+      if (params.startDate && occurred < new Date(params.startDate)) return false;
+      if (params.endDate && occurred > new Date(params.endDate)) return false;
+      return true;
+    });
+
+    const bucketMap = new Map<string, HeatmapBucket>();
+    const assets = new Set<string>();
+
+    for (const incident of filtered) {
+      const date = new Date(incident.occurredAt);
+      const dateKey = date.toISOString().split("T")[0]!;
+      const hour = date.getHours();
+      const key = `${dateKey}T${String(hour).padStart(2, "0")}`;
+
+      if (incident.assetCode) assets.add(incident.assetCode);
+
+      if (!bucketMap.has(key)) {
+        bucketMap.set(key, {
+          date: dateKey,
+          hour,
+          count: 0,
+          bySeverity: {},
+          incidents: [],
+        });
+      }
+
+      const bucket = bucketMap.get(key)!;
+      bucket.count++;
+      bucket.bySeverity[incident.severity] =
+        (bucket.bySeverity[incident.severity] ?? 0) + 1;
+      bucket.incidents.push(incident);
+    }
+
+    const buckets = Array.from(bucketMap.values()).sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.hour - b.hour;
+    });
+
+    return {
+      buckets,
+      totalIncidents: filtered.length,
+      dateRange: { start: startDate, end: endDate },
+      assets: Array.from(assets).sort(),
+    };
   }
 
   mapDatabaseRow(row: Record<string, unknown>): BridgeIncident {
