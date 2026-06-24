@@ -80,6 +80,30 @@ export interface HeatmapData {
   assets: string[];
 }
 
+export type IncidentReplayEventType =
+  | "incident_created"
+  | "ingestion"
+  | "status_change"
+  | "enrichment"
+  | "resolution";
+
+export interface IncidentReplayEvent {
+  id: string;
+  timestamp: string;
+  eventType: IncidentReplayEventType;
+  title: string;
+  description: string;
+  severity?: IncidentSeverity;
+  metadata: Record<string, unknown>;
+}
+
+export interface IncidentReplayTimeline {
+  incidentId: string;
+  incident: BridgeIncident;
+  events: IncidentReplayEvent[];
+  durationMs: number;
+}
+
 export class IncidentService {
   private db = getDatabase();
 
@@ -267,6 +291,109 @@ export class IncidentService {
       totalIncidents: filtered.length,
       dateRange: { start: startDate, end: endDate },
       assets: Array.from(assets).sort(),
+    };
+  }
+
+  async getIncidentReplayTimeline(id: string): Promise<IncidentReplayTimeline | null> {
+    const incident = await this.getIncident(id);
+    if (!incident) return null;
+
+    const ingestionRows = await this.db("bridge_incident_ingestion_history")
+      .where("incident_id", id)
+      .orderBy("created_at", "asc")
+      .select("*");
+
+    const events: IncidentReplayEvent[] = [];
+
+    events.push({
+      id: `${id}-created`,
+      timestamp: incident.occurredAt,
+      eventType: "incident_created",
+      title: "Incident detected",
+      description: incident.title,
+      severity: incident.severity,
+      metadata: {
+        bridgeId: incident.bridgeId,
+        assetCode: incident.assetCode,
+        sourceType: incident.sourceType,
+      },
+    });
+
+    for (const row of ingestionRows) {
+      const payload =
+        typeof row.payload === "object" && row.payload !== null
+          ? (row.payload as Record<string, unknown>)
+          : JSON.parse((row.payload as string) || "{}");
+
+      events.push({
+        id: row.id as string,
+        timestamp:
+          row.created_at instanceof Date
+            ? row.created_at.toISOString()
+            : String(row.created_at),
+        eventType: "ingestion",
+        title: `Ingestion: ${row.event_type}`,
+        description: (row.error_message as string | null) ?? `Source ${row.source_type} event processed`,
+        metadata: {
+          sourceType: row.source_type,
+          sourceExternalId: row.source_external_id,
+          status: row.status,
+          attemptNumber: row.attempt_number,
+          payload,
+        },
+      });
+    }
+
+    if (incident.enrichmentTags.length > 0 || Object.keys(incident.enrichmentMetadata).length > 0) {
+      events.push({
+        id: `${id}-enrichment`,
+        timestamp: incident.updatedAt,
+        eventType: "enrichment",
+        title: "Enrichment applied",
+        description: `Tags: ${incident.enrichmentTags.join(", ") || "none"}`,
+        metadata: {
+          enrichmentMetadata: incident.enrichmentMetadata,
+          enrichmentTags: incident.enrichmentTags,
+          derivedFields: incident.derivedFields,
+        },
+      });
+    }
+
+    if (incident.status !== "open") {
+      events.push({
+        id: `${id}-status`,
+        timestamp: incident.updatedAt,
+        eventType: "status_change",
+        title: `Status changed to ${incident.status}`,
+        description: `Incident moved to ${incident.status} state`,
+        severity: incident.severity,
+        metadata: { status: incident.status },
+      });
+    }
+
+    if (incident.resolvedAt) {
+      events.push({
+        id: `${id}-resolved`,
+        timestamp: incident.resolvedAt,
+        eventType: "resolution",
+        title: "Incident resolved",
+        description: "Incident marked as resolved",
+        metadata: { resolvedAt: incident.resolvedAt },
+      });
+    }
+
+    events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    const startMs = new Date(events[0]?.timestamp ?? incident.occurredAt).getTime();
+    const endMs = new Date(
+      events[events.length - 1]?.timestamp ?? incident.updatedAt,
+    ).getTime();
+
+    return {
+      incidentId: id,
+      incident,
+      events,
+      durationMs: Math.max(0, endMs - startMs),
     };
   }
 

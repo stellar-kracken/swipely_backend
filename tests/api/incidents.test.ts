@@ -36,4 +36,16 @@ describe("Incidents API", () => {
       expect(typeof response.statusCode).toBe("number");
     });
   });
+
+  describe("GET /api/v1/incidents/:id/replay", () => {
+    it("responds for replay timeline requests", async () => {
+      const response = await server.inject({
+        method: "GET",
+        url: "/api/v1/incidents/00000000-0000-0000-0000-000000000000/replay",
+      });
+
+      expect(typeof response.statusCode).toBe("number");
+      expect([404, 500]).toContain(response.statusCode);
+    });
+  });
 });

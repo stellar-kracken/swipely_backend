@@ -49,4 +49,9 @@ describe("IncidentService", () => {
     expect(result.totalIncidents).toBe(0);
     expect(result.assets).toEqual([]);
   });
+
+  it("getIncidentReplayTimeline returns null when incident missing", async () => {
+    const result = await service.getIncidentReplayTimeline("missing-id");
+    expect(result).toBeNull();
+  });
 });

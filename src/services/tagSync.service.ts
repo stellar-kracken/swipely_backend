@@ -81,7 +81,7 @@ export class TagSyncService {
       "Removing tag"
     );
 
-    return this.model.removeTag(entityType, entityId, validatedTag, source);
+    return this.model.removeEntityTag(entityType, entityId, validatedTag, source);
   }
 
   async syncEntityTags(
@@ -133,7 +133,7 @@ export class TagSyncService {
   }
 
   async getAllTags(): Promise<Array<{ tag: string; count: number }>> {
-    return this.model.getAllTags();
+    return this.model.getAllEntityTags();
   }
 
   async propagateTag(

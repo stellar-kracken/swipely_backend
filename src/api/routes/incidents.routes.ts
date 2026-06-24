@@ -54,6 +54,31 @@ export async function incidentRoutes(server: FastifyInstance) {
     }
   );
 
+  // GET /api/v1/incidents/:id/replay — ordered event timeline for replay player
+  server.get<{ Params: { id: string } }>(
+    "/:id/replay",
+    {
+      schema: {
+        tags: ["Incidents"],
+        summary: "Get incident replay timeline",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+        response: {
+          200: { type: "object", additionalProperties: true },
+          404: { $ref: "Error#" },
+        },
+      },
+    },
+    async (request, reply) => {
+      const timeline = await incidentService.getIncidentReplayTimeline(request.params.id);
+      if (!timeline) return reply.status(404).send({ error: "Incident not found" });
+      return timeline;
+    }
+  );
+
   // GET /api/v1/incidents/:id — get single incident
   server.get<{ Params: { id: string } }>(
     "/:id",
