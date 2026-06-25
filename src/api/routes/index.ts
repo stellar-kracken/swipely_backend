@@ -79,6 +79,10 @@ import { playbooksRoutes } from "./playbooks.routes.js";
 import { sourceHealthScoringRoutes } from "./sourceHealthScoring.routes.js";
 import { batchReconciliationRoutes } from "./batchReconciliation.routes.js";
 import { performanceBaselineRoutes } from "./performanceBaseline.routes.js";
+import { metricsAggregationRoutes } from "./metricsAggregation.routes.js";
+import { eventReplayRoutes } from "./eventReplay.routes.js";
+import { sourceDecommissionRoutes } from "./sourceDecommission.routes.js";
+import { providerCircuitBreakerRoutes } from "./providerCircuitBreaker.routes.js";
 
 export async function registerRoutes(server: FastifyInstance) {
   server.register(assetsRoutes, { prefix: "/api/v1/assets" });
@@ -192,4 +196,8 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(sourceHealthScoringRoutes, { prefix: "/api/v1/sources/health-scoring" });
   server.register(batchReconciliationRoutes, { prefix: "/api/v1/reconciliation/batch" });
   server.register(performanceBaselineRoutes, { prefix: "/api/v1/performance-baselines" });
+  server.register(metricsAggregationRoutes, { prefix: "/api/v1/metrics/aggregation" });
+  server.register(eventReplayRoutes, { prefix: "/api/v1/events/replay" });
+  server.register(sourceDecommissionRoutes, { prefix: "/api/v1/sources/decommission" });
+  server.register(providerCircuitBreakerRoutes, { prefix: "/api/v1/providers/circuit-breaker" });
 }

@@ -12,6 +12,8 @@ import { registerMetrics } from "./api/middleware/metrics.js";
 import { registerUsageMetrics } from "./api/middleware/usageMetrics.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
 import { startBatchReconciliationJob, stopBatchReconciliationJob } from "./jobs/batchReconciliation.job.js";
+import { startSourceDecommissionJob, stopSourceDecommissionJob } from "./jobs/sourceDecommission.job.js";
+import { startProviderCircuitBreakerJob, stopProviderCircuitBreakerJob } from "./jobs/providerCircuitBreaker.job.js";
 import { wsServer } from "./api/websocket/websocket.server.js";
 import {
   registerRateLimiting,
@@ -231,6 +233,14 @@ async function start() {
     // Start batch reconciliation job
     startBatchReconciliationJob();
     server.log.info("Batch reconciliation job started");
+
+    // Start source decommission readiness checks
+    startSourceDecommissionJob();
+    server.log.info("Source decommission readiness job started");
+
+    // Start provider circuit breaker recovery probe sweep
+    startProviderCircuitBreakerJob();
+    server.log.info("Provider circuit breaker job started");
   } catch (err) {
     server.log.error(err);
     process.exit(1);
@@ -255,6 +265,8 @@ async function start() {
     await getSupplyVerificationQueue().stop();
     await stopWebhookWorker();
     stopBatchReconciliationJob();
+    stopSourceDecommissionJob();
+    stopProviderCircuitBreakerJob();
     logger.info("Server closed");
     process.exit(0);
   };

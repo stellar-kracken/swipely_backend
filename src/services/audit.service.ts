@@ -31,7 +31,15 @@ export type AuditAction =
   | "tag.updated"
   | "tag.deleted"
   | "tag.assigned"
-  | "tag.unassigned";
+  | "tag.unassigned"
+  | "event.replay_executed"
+  | "source.decommission_started"
+  | "source.decommission_progress_updated"
+  | "source.decommission_completed"
+  | "source.decommission_rolled_back"
+  | "provider.circuit_breaker_tripped"
+  | "provider.circuit_breaker_recovered"
+  | "provider.circuit_breaker_override";
 
 export type AuditSeverity = "info" | "warning" | "critical";
 
@@ -334,10 +342,14 @@ export class AuditService {
       action === "auth.api_key_revoked" ||
       action === "webhook.secret_rotated" ||
       action === "admin.config_changed" ||
-      action === "admin.provider_allowlist_changed"
+      action === "admin.provider_allowlist_changed" ||
+      action === "event.replay_executed" ||
+      action === "source.decommission_started" ||
+      action === "source.decommission_rolled_back" ||
+      action === "provider.circuit_breaker_override"
     ) return "warning";
 
-    if (action === "admin.retention_policy_changed") return "critical";
+    if (action === "admin.retention_policy_changed" || action === "source.decommission_completed") return "critical";
 
     return "info";
   }
