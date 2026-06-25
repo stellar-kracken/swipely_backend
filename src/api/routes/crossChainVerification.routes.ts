@@ -1,4 +1,5 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import "@fastify/rate-limit";
 import { getCrossChainVerificationService } from "../../services/crossChainStateVerification.service.js";
 import { logger } from "../../utils/logger.js";
 
@@ -30,8 +31,8 @@ export async function crossChainVerificationRoutes(server: FastifyInstance) {
         },
       },
     } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-    async (request) => {
-      const { force } = request.query as { force?: boolean };
+    async (request: FastifyRequest<{ Querystring: { force?: boolean } }>) => {
+      const { force } = request.query;
       const results = await svc.verifyAllBridges(force ?? false);
       return {
         count: results.length,
@@ -74,7 +75,10 @@ export async function crossChainVerificationRoutes(server: FastifyInstance) {
         },
       },
     } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-    async (request, reply) => {
+    async (
+      request: FastifyRequest<{ Params: { bridgeId: string }; Querystring: { force?: boolean } }>,
+      reply: FastifyReply
+    ) => {
       const { bridgeId } = request.params;
       const { force } = request.query;
 
@@ -114,7 +118,7 @@ export async function crossChainVerificationRoutes(server: FastifyInstance) {
         },
       },
     } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-    async (request, reply) => {
+    async (request: FastifyRequest<{ Params: { bridgeId: string } }>, reply: FastifyReply) => {
       const { bridgeId } = request.params;
 
       try {
@@ -185,7 +189,15 @@ export async function crossChainVerificationRoutes(server: FastifyInstance) {
         },
       },
     } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-    async (request) => {
+    async (
+      request: FastifyRequest<{
+        Params: { bridgeId: string };
+        Body: {
+          sequence: number;
+          proof: { leafHash: string; proofPath: string[]; leafIndex: number };
+        };
+      }>
+    ) => {
       const { bridgeId } = request.params;
       const { sequence, proof } = request.body;
 
@@ -217,7 +229,7 @@ export async function crossChainVerificationRoutes(server: FastifyInstance) {
         },
       },
     } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-    async (request) => {
+    async (request: FastifyRequest<{ Params: { bridgeId: string }; Querystring: { limit?: number } }>) => {
       const { bridgeId } = request.params;
       const { limit } = request.query;
       return svc.getVerificationHistory(bridgeId, limit ?? 20);
