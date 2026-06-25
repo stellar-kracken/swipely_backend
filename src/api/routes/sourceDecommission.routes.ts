@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { sourceDecommissionService } from "../../services/sourceDecommission.service.js";
+import { sourceDecommissionService, type StartDecommissionInput } from "../../services/sourceDecommission.service.js";
 
 const sourceKeySchema = z.string().trim().min(1).max(120);
 
@@ -89,7 +89,7 @@ export async function sourceDecommissionRoutes(server: FastifyInstance) {
       const decommission = await sourceDecommissionService.startDecommission({
         ...body,
         actorId: request.apiKeyAuth?.id ?? request.apiKeyAuth?.name ?? "admin",
-      });
+      } as StartDecommissionInput);
       return reply.code(201).send({ decommission });
     }
   );

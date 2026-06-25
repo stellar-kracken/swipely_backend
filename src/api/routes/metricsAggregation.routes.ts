@@ -42,7 +42,7 @@ export async function metricsAggregationRoutes(server: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: { points: MetricDataPoint[] } }>, reply: FastifyReply) => {
       const body = ingestBodySchema.parse(request.body);
-      const count = await metricsAggregationService.ingest(body.points);
+      const count = await metricsAggregationService.ingest(body.points as MetricDataPoint[]);
       return reply.send({ ingested: count });
     }
   );
