@@ -11,6 +11,7 @@ import { registerValidation } from "./api/middleware/validation.js";
 import { registerMetrics } from "./api/middleware/metrics.js";
 import { registerUsageMetrics } from "./api/middleware/usageMetrics.js";
 import { startBridgeVerificationJob } from "./jobs/verification.job.js";
+import { startBatchReconciliationJob, stopBatchReconciliationJob } from "./jobs/batchReconciliation.job.js";
 import { wsServer } from "./api/websocket/websocket.server.js";
 import {
   registerRateLimiting,
@@ -226,6 +227,10 @@ async function start() {
     // Start real-time event stream federation
     await getEventFederationService().start();
     server.log.info("Event federation service started");
+
+    // Start batch reconciliation job
+    startBatchReconciliationJob();
+    server.log.info("Batch reconciliation job started");
   } catch (err) {
     server.log.error(err);
     process.exit(1);
@@ -249,6 +254,7 @@ async function start() {
     await JobQueue.getInstance().stop();
     await getSupplyVerificationQueue().stop();
     await stopWebhookWorker();
+    stopBatchReconciliationJob();
     logger.info("Server closed");
     process.exit(0);
   };
