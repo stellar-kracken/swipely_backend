@@ -1,6 +1,39 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { complianceReportGenerator } from "../../services/complianceReportGenerator.service.js";
+import {
+  complianceReportGenerator,
+  type ReportFilter,
+  type ReportFormat,
+  type ReportSection,
+  type ReportType,
+} from "../../services/complianceReportGenerator.service.js";
 import { authMiddleware } from "../middleware/auth.js";
+
+interface CreateReportTemplateBody {
+  name: string;
+  type: ReportType;
+  description?: string;
+  sections: ReportSection[];
+  includes: {
+    summary: boolean;
+    charts: boolean;
+    rawData: boolean;
+    metrics: boolean;
+    timeline: boolean;
+    incidents: boolean;
+  };
+  filters?: ReportFilter[];
+}
+
+interface GenerateReportBody {
+  templateId: string;
+  format: ReportFormat;
+  generatedBy: string;
+  periodStart: string;
+  periodEnd: string;
+  filters?: ReportFilter[];
+  includeSignature?: boolean;
+  archiveAfter?: boolean;
+}
 
 export async function complianceReportRoutes(server: FastifyInstance) {
   server.addHook("preHandler", authMiddleware());
@@ -86,13 +119,14 @@ export async function complianceReportRoutes(server: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: any }>, reply: FastifyReply) => {
       try {
+        const body = request.body as CreateReportTemplateBody;
         const template = await complianceReportGenerator.createTemplate({
-          name: request.body.name,
-          type: request.body.type,
-          description: request.body.description || "",
-          sections: request.body.sections,
-          includes: request.body.includes,
-          filters: request.body.filters || [],
+          name: body.name,
+          type: body.type,
+          description: body.description || "",
+          sections: body.sections,
+          includes: body.includes,
+          filters: body.filters || [],
           isActive: true,
         });
 
@@ -182,16 +216,17 @@ export async function complianceReportRoutes(server: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: any }>, reply: FastifyReply) => {
       try {
+        const body = request.body as GenerateReportBody;
         const report = await complianceReportGenerator.generateReport(
-          request.body.templateId,
-          request.body.format,
+          body.templateId,
+          body.format,
           {
-            generatedBy: request.body.generatedBy,
-            periodStart: new Date(request.body.periodStart),
-            periodEnd: new Date(request.body.periodEnd),
-            filters: request.body.filters,
-            includeSignature: request.body.includeSignature,
-            archiveAfter: request.body.archiveAfter,
+            generatedBy: body.generatedBy,
+            periodStart: new Date(body.periodStart),
+            periodEnd: new Date(body.periodEnd),
+            filters: body.filters,
+            includeSignature: body.includeSignature,
+            archiveAfter: body.archiveAfter,
           }
         );
 

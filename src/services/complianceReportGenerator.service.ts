@@ -10,7 +10,6 @@ import { createHash, createSign, randomBytes } from "crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import PDFDocument from "pdfkit";
-import { Parser } from "json2csv";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -122,6 +121,30 @@ export interface AccessLogEntry {
   accessedBy: string;
   action: string; // "view", "download", "audit"
   ipAddress?: string;
+}
+
+type ReportRecord = Record<string, unknown>;
+
+interface CollectedSectionData {
+  title: string;
+  recordCount: number;
+  records: ReportRecord[];
+  aggregation?: ReportSection["aggregation"];
+  error?: string;
+}
+
+interface CollectedReportData {
+  templateName: string;
+  periodStart: Date;
+  periodEnd: Date;
+  sections: Record<string, CollectedSectionData>;
+  totalRecords: number;
+  summary: Record<string, any>;
+  completeness: number;
+  accuracy: number;
+  timeliness: number;
+  warnings: string[];
+  notes: string[];
 }
 
 // ─── Compliance Report Generator ──────────────────────────────────────────────
@@ -343,9 +366,9 @@ export class ComplianceReportGenerator {
     periodStart: Date,
     periodEnd: Date,
     filters?: ReportFilter[]
-  ): Promise<any> {
+  ): Promise<CollectedReportData> {
     const db = getDatabase();
-    const data: any = {
+    const data: CollectedReportData = {
       templateName: template.name,
       periodStart,
       periodEnd,
@@ -392,7 +415,7 @@ export class ComplianceReportGenerator {
     periodStart: Date,
     periodEnd: Date,
     filters?: ReportFilter[]
-  ): Promise<any> {
+  ): Promise<CollectedSectionData> {
     const db = getDatabase();
 
     try {
@@ -422,7 +445,7 @@ export class ComplianceReportGenerator {
         query = query.limit(section.limit);
       }
 
-      const records = await query;
+      const records = (await query) as ReportRecord[];
 
       return {
         title: section.title,
@@ -449,7 +472,7 @@ export class ComplianceReportGenerator {
    */
   private async generateSummary(
     template: ReportTemplate,
-    data: any
+    data: CollectedReportData
   ): Promise<Record<string, any>> {
     const summary: Record<string, any> = {
       generatedAt: new Date(),
@@ -501,7 +524,7 @@ export class ComplianceReportGenerator {
    */
   private async generatePDF(
     template: ReportTemplate,
-    data: any
+    data: CollectedReportData
   ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
@@ -554,7 +577,7 @@ export class ComplianceReportGenerator {
    */
   private async generateCSV(
     template: ReportTemplate,
-    data: any
+    data: CollectedReportData
   ): Promise<string> {
     try {
       const csvData = [];
@@ -574,8 +597,7 @@ export class ComplianceReportGenerator {
         csvData.push(`${sectionData.title}`);
 
         if (sectionData.recordCount > 0 && sectionData.records.length > 0) {
-          const parser = new Parser({ fields: Object.keys(sectionData.records[0]) });
-          csvData.push(parser.parse(sectionData.records));
+          csvData.push(this.recordsToCsv(sectionData.records));
         } else {
           csvData.push("No records");
         }
@@ -595,7 +617,7 @@ export class ComplianceReportGenerator {
    */
   private async generateHTML(
     template: ReportTemplate,
-    data: any
+    data: CollectedReportData
   ): Promise<string> {
     let html = `
     <!DOCTYPE html>
@@ -643,7 +665,7 @@ export class ComplianceReportGenerator {
           for (const record of sectionData.records.slice(0, 100)) {
             html += `<tr>`;
             for (const header of headers) {
-              html += `<td>${record[header] || ""}</td>`;
+              html += `<td>${this.formatCellValue(record[header])}</td>`;
             }
             html += `</tr>`;
           }
@@ -656,6 +678,36 @@ export class ComplianceReportGenerator {
     html += `</body></html>`;
 
     return html;
+  }
+
+  private recordsToCsv(records: ReportRecord[]): string {
+    const fields = Object.keys(records[0] || {});
+    const rows = [
+      fields.map((field) => this.escapeCsvValue(field)).join(","),
+      ...records.map((record) =>
+        fields.map((field) => this.escapeCsvValue(record[field])).join(",")
+      ),
+    ];
+
+    return rows.join("\n");
+  }
+
+  private escapeCsvValue(value: unknown): string {
+    const text = this.formatCellValue(value);
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  private formatCellValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return "";
+    }
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    return String(value);
   }
 
   /**

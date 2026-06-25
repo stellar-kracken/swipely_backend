@@ -1,10 +1,46 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { alertEscalationService } from "../../services/alertEscalation.service.js";
+import {
+  alertEscalationService,
+  type AlertSeverity,
+  type EscalationTrigger,
+} from "../../services/alertEscalation.service.js";
 import { authMiddleware } from "../middleware/auth.js";
 import {
   getPaginationParams,
   formatPaginatedResponse,
 } from "../../utils/pagination.js";
+
+interface CreateEscalationRuleBody {
+  assetCode: string;
+  alertType: string;
+  fromSeverity: AlertSeverity;
+  toSeverity: AlertSeverity;
+  triggerType: EscalationTrigger;
+  frequencyThreshold?: number;
+  durationMinutes?: number;
+  recurrenceCount?: number;
+  timeWindowMinutes: number;
+  allowManualOverride?: boolean;
+  notificationChannels?: string[];
+}
+
+interface RecordAlertOccurrenceBody {
+  alertRuleId: string;
+  assetCode: string;
+  alertType: string;
+  severity: AlertSeverity;
+}
+
+interface ManualOverrideBody {
+  conditionHistoryId: string;
+  overrideBy: string;
+  reason: string;
+  newSeverity?: AlertSeverity;
+}
+
+interface CloseConditionHistoryBody {
+  conditionHistoryId: string;
+}
 
 export async function alertEscalationRoutes(server: FastifyInstance) {
   server.addHook("preHandler", authMiddleware());
@@ -103,18 +139,19 @@ export async function alertEscalationRoutes(server: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: any }>, reply: FastifyReply) => {
       try {
+        const body = request.body as CreateEscalationRuleBody;
         const rule = await alertEscalationService.createEscalationRule({
-          assetCode: request.body.assetCode,
-          alertType: request.body.alertType,
-          fromSeverity: request.body.fromSeverity,
-          toSeverity: request.body.toSeverity,
-          triggerType: request.body.triggerType,
-          frequencyThreshold: request.body.frequencyThreshold,
-          durationMinutes: request.body.durationMinutes,
-          recurrenceCount: request.body.recurrenceCount,
-          timeWindowMinutes: request.body.timeWindowMinutes,
-          allowManualOverride: request.body.allowManualOverride !== false,
-          notificationChannels: request.body.notificationChannels || [],
+          assetCode: body.assetCode,
+          alertType: body.alertType,
+          fromSeverity: body.fromSeverity,
+          toSeverity: body.toSeverity,
+          triggerType: body.triggerType,
+          frequencyThreshold: body.frequencyThreshold,
+          durationMinutes: body.durationMinutes,
+          recurrenceCount: body.recurrenceCount,
+          timeWindowMinutes: body.timeWindowMinutes,
+          allowManualOverride: body.allowManualOverride !== false,
+          notificationChannels: body.notificationChannels || [],
           isActive: true,
         });
 
@@ -166,11 +203,12 @@ export async function alertEscalationRoutes(server: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: any }>, reply: FastifyReply) => {
       try {
+        const body = request.body as RecordAlertOccurrenceBody;
         const conditionHistory = await alertEscalationService.recordAlertOccurrence(
-          request.body.alertRuleId,
-          request.body.assetCode,
-          request.body.alertType,
-          request.body.severity
+          body.alertRuleId,
+          body.assetCode,
+          body.alertType,
+          body.severity
         );
 
         return reply.send({ conditionHistory });
@@ -211,6 +249,7 @@ export async function alertEscalationRoutes(server: FastifyInstance) {
               },
             },
           },
+          500: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -265,11 +304,12 @@ export async function alertEscalationRoutes(server: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: any }>, reply: FastifyReply) => {
       try {
+        const body = request.body as ManualOverrideBody;
         await alertEscalationService.applyManualOverride(
-          request.body.conditionHistoryId,
-          request.body.overrideBy,
-          request.body.reason,
-          request.body.newSeverity
+          body.conditionHistoryId,
+          body.overrideBy,
+          body.reason,
+          body.newSeverity
         );
 
         return reply.send({ message: "Manual override applied successfully" });
@@ -313,9 +353,8 @@ export async function alertEscalationRoutes(server: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: any }>, reply: FastifyReply) => {
       try {
-        await alertEscalationService.closeConditionHistory(
-          request.body.conditionHistoryId
-        );
+        const body = request.body as CloseConditionHistoryBody;
+        await alertEscalationService.closeConditionHistory(body.conditionHistoryId);
 
         return reply.send({ message: "Condition history closed successfully" });
       } catch (error) {

@@ -89,6 +89,14 @@ export interface EscalationMetrics {
   manualOverrides: number;
 }
 
+type CountRow = { count?: string | number };
+type EscalationTimeRow = { minutes_to_escalate?: string | number | null };
+type TriggerCountRow = { trigger: EscalationTrigger; count?: string | number };
+type SeverityCountRow = { to_severity: AlertSeverity; count?: string | number };
+
+const countValue = (value: string | number | null | undefined): number =>
+  Number(value ?? 0);
+
 // ─── Alert Escalation Service ─────────────────────────────────────────────────
 
 export class AlertEscalationService {
@@ -556,51 +564,51 @@ export class AlertEscalationService {
         activeConditions,
         manualOverrides,
       ] = await Promise.all([
-        db("alert_escalation_events").count("id as count").first(),
+        db("alert_escalation_events").count("id as count").first<CountRow>(),
         db("alert_escalation_events")
           .where({ escalated_at: { ">=": oneDayAgo } })
           .count("id as count")
-          .first(),
+          .first<CountRow>(),
         db("alert_escalation_events")
           .select("trigger")
           .count("id as count")
-          .groupBy("trigger"),
+          .groupBy("trigger") as Promise<TriggerCountRow[]>,
         db("alert_escalation_events")
           .select("to_severity")
           .count("id as count")
-          .groupBy("to_severity"),
+          .groupBy("to_severity") as Promise<SeverityCountRow[]>,
         db("alert_condition_history")
           .where({ is_active: true })
           .count("id as count")
-          .first(),
+          .first<CountRow>(),
         db("alert_escalation_events")
           .where({ escalated_by: "manual" })
           .count("id as count")
-          .first(),
+          .first<CountRow>(),
       ]);
 
       // Calculate average time to escalate
-      const escalationTimes = await db("alert_condition_history")
+      const escalationTimes = (await db("alert_condition_history")
         .select(
           db.raw(
             "EXTRACT(EPOCH FROM (MIN(ae.escalated_at) - ach.created_at))/60 as minutes_to_escalate"
           )
         )
         .join("alert_escalation_events as ae", "ach.id", "ae.condition_history_id")
-        .groupBy("ach.id");
+        .groupBy("ach.id")) as EscalationTimeRow[];
 
       const avgTimeToEscalate =
         escalationTimes.length > 0
           ? escalationTimes.reduce(
-              (sum, row) => sum + (row.minutes_to_escalate || 0),
+              (sum, row) => sum + countValue(row.minutes_to_escalate),
               0
             ) / escalationTimes.length
           : 0;
 
       // Build metrics object
       const metrics: EscalationMetrics = {
-        totalEscalations: totalEscalations?.count || 0,
-        escalationsBy24h: escalationsBy24h?.count || 0,
+        totalEscalations: countValue(totalEscalations?.count),
+        escalationsBy24h: countValue(escalationsBy24h?.count),
         averageTimeToEscalate: Math.round(avgTimeToEscalate * 100) / 100,
         escalationsByTrigger: {
           frequency: 0,
@@ -614,21 +622,21 @@ export class AlertEscalationService {
           high: 0,
           critical: 0,
         },
-        activeConditions: activeConditions?.count || 0,
-        manualOverrides: manualOverrides?.count || 0,
+        activeConditions: countValue(activeConditions?.count),
+        manualOverrides: countValue(manualOverrides?.count),
       };
 
       // Populate trigger counts
       for (const row of escalationsByTrigger) {
         if (row.trigger in metrics.escalationsByTrigger) {
-          (metrics.escalationsByTrigger as any)[row.trigger] = row.count;
+          metrics.escalationsByTrigger[row.trigger] = countValue(row.count);
         }
       }
 
       // Populate severity counts
       for (const row of escalationsBySeverity) {
         if (row.to_severity in metrics.escalationsBySeverity) {
-          (metrics.escalationsBySeverity as any)[row.to_severity] = row.count;
+          metrics.escalationsBySeverity[row.to_severity] = countValue(row.count);
         }
       }
 
