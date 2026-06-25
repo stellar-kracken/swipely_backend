@@ -15,6 +15,7 @@ import { initSupplyVerificationJob } from "../jobs/supplyVerification.job.js";
 import { runAuditRetentionJob } from "../jobs/auditRetention.job.js";
 import { processCachePriming } from "./cachePrimer.job.js";
 import { processAnomalyDetection } from "./anomalyDetection.job.js";
+import { processMetricsAggregation } from "./metricsAggregation.worker.js";
 
 export async function initJobSystem() {
   const jobQueue = JobQueue.getInstance();
@@ -69,6 +70,9 @@ export async function initJobSystem() {
         break;
       case "anomaly-detection":
         await processAnomalyDetection(job);
+        break;
+      case "metrics-aggregation-pipeline":
+        await processMetricsAggregation(job);
         break;
       default:
         logger.warn({ jobName: job.name }, "Unknown job name in worker");
@@ -154,6 +158,13 @@ export async function initJobSystem() {
   // Cache priming: High priority every hour, Full every day at 03:00 UTC
   await jobQueue.addRepeatableJob("cache-priming", { priority: "high" }, "0 * * * *");
   await jobQueue.addRepeatableJob("cache-priming", {}, "0 3 * * *");
+
+  // Metrics aggregation pipeline: hourly rollups every hour, daily rollups just after
+  // midnight, weekly rollups Monday at 01:00, retention cleanup daily at 03:00 UTC.
+  await jobQueue.addRepeatableJob("metrics-aggregation-pipeline", { type: "hourly" }, "5 * * * *");
+  await jobQueue.addRepeatableJob("metrics-aggregation-pipeline", { type: "daily" }, "15 0 * * *");
+  await jobQueue.addRepeatableJob("metrics-aggregation-pipeline", { type: "weekly" }, "30 1 * * 1");
+  await jobQueue.addRepeatableJob("metrics-aggregation-pipeline", { type: "retention" }, "0 3 * * *");
 
   logger.info("Scheduled job system initialized");
 }
