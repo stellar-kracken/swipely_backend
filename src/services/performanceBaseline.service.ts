@@ -44,7 +44,7 @@ export class PerformanceBaselineService {
   private db = getDatabase();
 
   async ensureTable(): Promise<void> {
-    await this.db.query(`
+    await this.db.raw(`
       CREATE TABLE IF NOT EXISTS performance_baselines (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         endpoint TEXT NOT NULL,
@@ -84,10 +84,10 @@ export class PerformanceBaselineService {
       const p99 = this.percentile(durations, 99);
       const threshold = p95 * 1.5;
 
-      const row = await this.db.query<PerformanceBaseline & Record<string, unknown>>(
+      const row = await this.db.raw(
         `INSERT INTO performance_baselines
            (endpoint, method, p50_ms, p95_ms, p99_ms, sample_count, threshold_ms)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          RETURNING
            id,
            endpoint,
@@ -111,7 +111,7 @@ export class PerformanceBaselineService {
   }
 
   async getLatestBaselines(): Promise<PerformanceBaseline[]> {
-    const result = await this.db.query<Record<string, unknown>>(
+    const result = await this.db.raw(
       `SELECT DISTINCT ON (endpoint, method)
          id,
          endpoint,
@@ -130,14 +130,14 @@ export class PerformanceBaselineService {
   }
 
   async getBaselineForEndpoint(endpoint: string, method = "GET"): Promise<PerformanceBaseline | null> {
-    const result = await this.db.query<Record<string, unknown>>(
+    const result = await this.db.raw(
       `SELECT
          id, endpoint, method,
          p50_ms AS "p50Ms", p95_ms AS "p95Ms", p99_ms AS "p99Ms",
          sample_count AS "sampleCount", threshold_ms AS "thresholdMs",
          measured_at AS "measuredAt", created_at AS "createdAt"
        FROM performance_baselines
-       WHERE endpoint = $1 AND method = $2
+       WHERE endpoint = ? AND method = ?
        ORDER BY measured_at DESC
        LIMIT 1`,
       [endpoint, method.toUpperCase()]
@@ -186,15 +186,15 @@ export class PerformanceBaselineService {
   }
 
   async getTrend(endpoint: string, method = "GET", limit = 30): Promise<BaselineTrend> {
-    const result = await this.db.query<Record<string, unknown>>(
+    const result = await this.db.raw(
       `SELECT
          p95_ms AS "p95Ms",
          sample_count AS "sampleCount",
          measured_at AS "measuredAt"
        FROM performance_baselines
-       WHERE endpoint = $1 AND method = $2
+       WHERE endpoint = ? AND method = ?
        ORDER BY measured_at DESC
-       LIMIT $3`,
+       LIMIT ?`,
       [endpoint, method.toUpperCase(), limit]
     );
 
