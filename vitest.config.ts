@@ -29,6 +29,7 @@ export default defineConfig({
             "tests/workers/**/*.test.ts",
             "tests/jobs/**/*.test.ts",
             "tests/testing/**/*.test.ts",
+            "tests/contracts/**/*.test.ts",
           ],
           setupFiles: ["./tests/setup.ts"],
         },

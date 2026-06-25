@@ -57,6 +57,7 @@ import { circuitHealthRoutes } from "./circuitHealth.js";
 import { ruleEvaluatorRoutes } from "./ruleEvaluator.routes.js";
 import { automationRulesRoutes } from "./automationRules.routes.js";
 import { serviceAnnotationRoutes } from "./serviceAnnotation.routes.js";
+import { contractAnnotationRoutes } from "./contractAnnotations.routes.js";
 import { assetMergeRoutes } from "./assetMerge.routes.js";
 import { alertWindowingRoutes } from "./alertWindowing.routes.js";
 import { queryPresetsRoutes } from "./queryPresets.js";
@@ -163,6 +164,7 @@ export async function registerRoutes(server: FastifyInstance) {
   server.register(serviceAnnotationRoutes, {
     prefix: "/api/v1/service-annotations",
   });
+  server.register(contractAnnotationRoutes, { prefix: "/api/v1/contracts" });
   server.register(assetMergeRoutes, { prefix: "/api/v1/asset-merge" });
   server.register(alertWindowingRoutes, { prefix: "/api/v1/alert-windowing" });
   server.register(queryPresetsRoutes, { prefix: "/api/v1/query-presets" });

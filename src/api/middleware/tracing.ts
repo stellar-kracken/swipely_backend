@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { randomUUID } from "crypto";
 import { logger } from "../../utils/logger.js";
 import { config } from "../../config/index.js";
+import { runWithRequestContext } from "../../utils/requestContext.js";
 
 // ---------------------------------------------------------------------------
 // Types and Interfaces
@@ -410,10 +411,13 @@ export async function registerTracing(server: FastifyInstance): Promise<void> {
   const traceManager = TraceManager.getInstance();
   const tracedLogger = new TracedLogger(traceManager);
 
-  // Add trace context to request object
-  server.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
+  // Add trace context to request object, and propagate it via
+  // AsyncLocalStorage so every async call chain originating from this
+  // request (service calls, outbound HTTP, logging) can read it without
+  // needing the Fastify request object threaded through.
+  server.addHook("onRequest", (request: FastifyRequest, reply: FastifyReply, done: () => void) => {
     const traceContext = traceManager.createTraceContext(request);
-    
+
     // Add trace context to request for use in other middleware/routes
     (request as any).traceContext = traceContext;
     (request as any).tracedLogger = tracedLogger;
@@ -431,6 +435,17 @@ export async function registerTracing(server: FastifyInstance): Promise<void> {
       userAgent: request.headers['user-agent'],
       ip: traceContext.ip,
     });
+
+    runWithRequestContext(
+      {
+        requestId: traceContext.requestId,
+        correlationId: traceContext.correlationId,
+        traceId: traceContext.traceId,
+        spanId: traceContext.spanId,
+        userId: traceContext.userId,
+      },
+      done
+    );
   });
 
   // Add timing and response logging
