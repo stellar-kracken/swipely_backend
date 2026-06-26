@@ -9,6 +9,8 @@ import { PriceModel } from "../database/models/price.model.js";
 
 const QUEUE_NAME = "price-aggregator";
 
+const priceModel = new PriceModel();
+
 const connection = {
   host: config.REDIS_HOST,
   port: config.REDIS_PORT,
@@ -16,6 +18,22 @@ const connection = {
 };
 
 export const priceAggregatorQueue = new Queue(QUEUE_NAME, { connection });
+
+async function persistAggregatedPrice(aggregated: AggregatedPrice): Promise<void> {
+  try {
+    const now = new Date();
+    const records = aggregated.sources.map((src) => ({
+      time: now,
+      symbol: aggregated.symbol,
+      source: src.source,
+      price: src.price,
+      volume_24h: null as number | null,
+    }));
+    await priceModel.insertBatch(records);
+  } catch (err) {
+    logger.error({ err, symbol: aggregated.symbol }, "Failed to persist aggregated price");
+  }
+}
 
 /**
  * Worker that periodically aggregates prices from multiple sources:
