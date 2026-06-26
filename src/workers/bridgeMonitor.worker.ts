@@ -51,14 +51,32 @@ export const bridgeMonitorWorker = new Worker(
       const supplyCheck = await bridgeService.verifySupply(assetCode);
 
       if (!supplyCheck.match) {
-        logger.warn(
-          { ...supplyCheck },
-          "Bridge supply mismatch detected"
-        );
-        // TODO: Trigger alert via configured notification channel
+        logger.warn({ ...supplyCheck }, "Bridge supply mismatch detected");
+
+        const dedupEvent: Omit<AlertEvent, "eventId"> = {
+          ruleId: `bridge-monitor-${assetCode}`,
+          assetCode,
+          alertType: "supply_mismatch",
+          priority: "high",
+          triggeredValue: supplyCheck.mismatchPercentage ?? 0,
+          threshold: config.BRIDGE_MISMATCH_THRESHOLD ?? 0.01,
+          metric: "supply_mismatch_pct",
+          webhookDelivered: false,
+          onChainEventId: null,
+        };
+
+        const dedupResult = duplicateAlertCheckService.check(dedupEvent);
+
+        if (!dedupResult.isDuplicate || dedupResult.action !== "block") {
+          const alert = buildMismatchAlert(assetCode, supplyCheck);
+          await alertRoutingService.routeAlert(alert);
+          logger.info({ assetCode }, "Supply mismatch alert routed");
+        } else {
+          logger.debug({ assetCode, reason: dedupResult.reason }, "Mismatch alert suppressed by deduplication");
+        }
       }
 
-      // TODO: Record results in TimescaleDB for historical tracking
+      await persistMonitorResult(assetCode, supplyCheck);
       return { success: true, assetCode, supplyCheck };
     } catch (error) {
       logger.error({ error, assetCode }, "Bridge monitor job failed");
