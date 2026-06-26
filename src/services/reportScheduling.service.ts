@@ -64,9 +64,15 @@ const DEFAULT_PREFERRED_HOUR = 9; // 9 AM
 export class ReportSchedulingService {
   private static instance: ReportSchedulingService;
   private emailService: EmailNotificationService;
+  private analyticsService: AnalyticsService;
+  private alertService: AlertService;
+  private reconciliationService: ReconciliationService;
 
   private constructor() {
     this.emailService = new EmailNotificationService();
+    this.analyticsService = new AnalyticsService();
+    this.alertService = new AlertService();
+    this.reconciliationService = new ReconciliationService();
   }
 
   public static getInstance(): ReportSchedulingService {
