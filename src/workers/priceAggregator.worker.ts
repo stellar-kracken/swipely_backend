@@ -34,6 +34,30 @@ function buildDeviationAlert(symbol: string, deviation: { deviated: boolean; per
   };
 }
 
+async function routeDeviationAlert(symbol: string, deviation: { deviated: boolean; percentage: number }): Promise<void> {
+  const dedupEvent: Omit<AlertEvent, "eventId"> = {
+    ruleId: `price-aggregator-${symbol}`,
+    assetCode: symbol,
+    alertType: "price_deviation",
+    priority: deviation.percentage > (config.PRICE_DEVIATION_THRESHOLD ?? 0.02) * 2 ? "critical" : "high",
+    triggeredValue: deviation.percentage,
+    threshold: config.PRICE_DEVIATION_THRESHOLD ?? 0.02,
+    metric: "price_deviation_pct",
+    webhookDelivered: false,
+    onChainEventId: null,
+  };
+
+  const dedupResult = duplicateAlertCheckService.check(dedupEvent);
+
+  if (!dedupResult.isDuplicate || dedupResult.action !== "block") {
+    const alert = buildDeviationAlert(symbol, deviation);
+    await alertRoutingService.routeAlert(alert);
+    logger.info({ symbol, percentage: deviation.percentage }, "Price deviation alert routed");
+  } else {
+    logger.debug({ symbol, reason: dedupResult.reason }, "Price deviation alert suppressed by deduplication");
+  }
+}
+
 async function persistAggregatedPrice(aggregated: AggregatedPrice): Promise<void> {
   try {
     const now = new Date();
