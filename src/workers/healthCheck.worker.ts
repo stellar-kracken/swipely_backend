@@ -61,6 +61,12 @@ async function routeDeterioratingAlerts(scores: HealthScore[]): Promise<void> {
   }
 }
 
+/**
+ * Inserts one row per score into health_scores (TimescaleDB hypertable).
+ * Columns: time, symbol, overall_score, liquidity_depth_score, price_stability_score,
+ *          bridge_uptime_score, reserve_backing_score, volume_trend_score.
+ * Errors per-symbol are swallowed so a single bad row never halts the batch.
+ */
 async function persistHealthScores(scores: HealthScore[]): Promise<void> {
   const now = new Date();
   for (const score of scores) {
