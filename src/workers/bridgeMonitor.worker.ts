@@ -17,6 +17,25 @@ const connection = {
 
 export const bridgeMonitorQueue = new Queue(QUEUE_NAME, { connection });
 
+async function persistMonitorResult(
+  assetCode: string,
+  supplyCheck: { match: boolean; mismatchPercentage?: number; stellarSupply?: number; evmSupply?: number }
+): Promise<void> {
+  try {
+    const db = getDatabase();
+    await db("bridge_monitor_results").insert({
+      time: new Date(),
+      asset_code: assetCode,
+      supply_match: supplyCheck.match,
+      mismatch_pct: supplyCheck.mismatchPercentage ?? 0,
+      stellar_supply: supplyCheck.stellarSupply ?? null,
+      evm_supply: supplyCheck.evmSupply ?? null,
+    });
+  } catch (err) {
+    logger.error({ err, assetCode }, "Failed to persist bridge monitor result");
+  }
+}
+
 function buildMismatchAlert(assetCode: string, supplyCheck: { mismatchPercentage?: number }): RouteableAlert {
   return {
     eventTime: new Date(),
