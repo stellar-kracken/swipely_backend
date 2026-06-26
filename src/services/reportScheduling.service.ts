@@ -449,6 +449,13 @@ export class ReportSchedulingService {
     }
   }
 
+  /**
+   * Builds a fully-rendered HTML email report by fetching live data from four services
+   * in parallel: protocol stats, asset rankings, recent alerts (filtered to the delivery
+   * period), and reconciliation drift summaries.  Each section falls back to a
+   * "Data unavailable" placeholder if its upstream service call fails, so a single
+   * degraded dependency never prevents the report from being sent.
+   */
   private async generateReportHtml(delivery: ReportDelivery): Promise<string> {
     const periodLabel = `${delivery.periodStart.toISOString().slice(0, 10)} – ${delivery.periodEnd
       .toISOString()
