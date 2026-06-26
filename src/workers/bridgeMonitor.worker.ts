@@ -17,6 +17,11 @@ const connection = {
 
 export const bridgeMonitorQueue = new Queue(QUEUE_NAME, { connection });
 
+/**
+ * Writes one row to bridge_monitor_results (TimescaleDB hypertable, time column = now).
+ * Columns: time, asset_code, supply_match, mismatch_pct, stellar_supply, evm_supply.
+ * Errors are swallowed so a DB outage never blocks the job from completing.
+ */
 async function persistMonitorResult(
   assetCode: string,
   supplyCheck: { match: boolean; mismatchPercentage?: number; stellarSupply?: number; evmSupply?: number }
