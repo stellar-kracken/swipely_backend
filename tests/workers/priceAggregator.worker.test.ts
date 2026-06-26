@@ -102,6 +102,15 @@ describe("priceAggregator.worker", () => {
       expect(records[1]).toMatchObject({ symbol: "USDC", source: "circle", price: 1.0 });
     });
 
+    it("sets volume_24h to null on each persisted record", async () => {
+      getAggregatedPriceMock.mockResolvedValue(makeAggregated("USDC"));
+
+      await processPriceAggregatorJob({ id: "job-vol", data: { symbol: "USDC" } });
+
+      const records = insertBatchMock.mock.calls[0][0];
+      expect(records.every((r: any) => r.volume_24h === null)).toBe(true);
+    });
+
     it("skips persistence when aggregatedPrice is null", async () => {
       getAggregatedPriceMock.mockResolvedValue(null);
 
