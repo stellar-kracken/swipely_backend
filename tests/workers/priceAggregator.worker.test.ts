@@ -178,6 +178,18 @@ describe("priceAggregator.worker", () => {
     });
   });
 
+  describe("alert and persistence in same job", () => {
+    it("both routes alert and persists prices when deviation detected", async () => {
+      getAggregatedPriceMock.mockResolvedValue(makeAggregated("USDC"));
+      checkDeviationMock.mockResolvedValue({ deviated: true, percentage: 0.03 });
+
+      await processPriceAggregatorJob({ id: "job-both", data: { symbol: "USDC" } });
+
+      expect(routeAlertMock).toHaveBeenCalledOnce();
+      expect(insertBatchMock).toHaveBeenCalledOnce();
+    });
+  });
+
   describe("deduplication", () => {
     it("suppresses alert when dedup check blocks", async () => {
       getAggregatedPriceMock.mockResolvedValue(makeAggregated("USDC"));
