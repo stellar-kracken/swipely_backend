@@ -2,6 +2,8 @@ import { Worker, Queue } from "bullmq";
 import { config } from "../config/index.js";
 import { BridgeService } from "../services/bridge.service.js";
 import { logger } from "../utils/logger.js";
+import { alertRoutingService } from "../services/alertRouting.service.js";
+import { duplicateAlertCheckService } from "../services/duplicateAlertCheck.service.js";
 
 const QUEUE_NAME = "bridge-monitor";
 
