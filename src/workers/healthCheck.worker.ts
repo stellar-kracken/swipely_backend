@@ -21,6 +21,21 @@ export const healthCheckQueue = new Queue(QUEUE_NAME, { connection });
 
 import type { HealthScore } from "../services/health.service.js";
 
+function buildDeterioratingAlert(score: HealthScore): RouteableAlert {
+  return {
+    eventTime: new Date(),
+    alertRuleId: `health-check-${score.symbol}`,
+    ownerAddress: "system",
+    ruleName: "Health Score Deteriorating",
+    assetCode: score.symbol,
+    sourceType: "health_deterioration",
+    severity: score.overallScore < 0.3 ? "critical" : "high",
+    triggeredValue: score.overallScore,
+    threshold: config.HEALTH_SCORE_THRESHOLD ?? 0.5,
+    metric: "overall_health_score",
+  };
+}
+
 async function persistHealthScores(scores: HealthScore[]): Promise<void> {
   const now = new Date();
   for (const score of scores) {
