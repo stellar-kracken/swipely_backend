@@ -222,5 +222,17 @@ describe("priceAggregator.worker", () => {
       expect(dedupCall.ruleId).toBe("price-aggregator-EURC");
       expect(alertCall.alertRuleId).toBe("price-aggregator-EURC");
     });
+
+    it("triggeredValue in dedup event and alert both equal the actual deviation percentage", async () => {
+      getAggregatedPriceMock.mockResolvedValue(makeAggregated("USDC"));
+      checkDeviationMock.mockResolvedValue({ deviated: true, percentage: 0.035 });
+
+      await processPriceAggregatorJob({ id: "job-13", data: { symbol: "USDC" } });
+
+      const dedupCall = checkDedupMock.mock.calls[0][0];
+      const alertCall = routeAlertMock.mock.calls[0][0];
+      expect(dedupCall.triggeredValue).toBeCloseTo(0.035);
+      expect(alertCall.triggeredValue).toBeCloseTo(0.035);
+    });
   });
 });
