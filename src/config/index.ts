@@ -205,14 +205,23 @@ export interface StellarAssetConfig {
   issuer: string;
 }
 
+function validateIssuerAddress(asset: StellarAssetConfig): void {
+  if (asset.issuer !== "native" && asset.issuer.length !== 56) {
+    throw new Error(
+      `[config] Invalid issuer for ${asset.code}: expected 56 chars, got ${asset.issuer.length}`
+    );
+  }
+}
+
 export const SUPPORTED_ASSETS: StellarAssetConfig[] = [
   { code: "XLM", issuer: "native" },
   { code: "USDC", issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN" },
   { code: "PYUSD", issuer: "GBHZAE5IQTOPQZ66TFWZYIYCHQ6T3GMWHDKFEXAKYWJ2BHLZQ227KRYE" },
   { code: "EURC", issuer: "GDQOE23CFSUMSVZZ4YRVXGW7PCFNIAHLMRAHDE4Z32DIBQGH4KZZK2KZ" },
-  // TODO: FOBXX issuer address is truncated (46 chars instead of 56). Verify correct address before enabling.
-  // { code: "FOBXX", issuer: "GBX7VUT2UTUKO2H76J26D7QYWNFW6C2NYN6K74Y3K43HGBXYZ" },
+  { code: "FOBXX", issuer: "GBHNGLLIE3KWGKCHIKMHJ5HVZHYIK7WTBE4QF5PLAKL4CJGSEU7HZIW5" },
 ];
+
+SUPPORTED_ASSETS.forEach(validateIssuerAddress);
 
 const parsed = envSchema.safeParse(process.env);
 
