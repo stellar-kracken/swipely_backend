@@ -2,8 +2,9 @@ import { Worker, Queue } from "bullmq";
 import { config } from "../config/index.js";
 import { BridgeService } from "../services/bridge.service.js";
 import { logger } from "../utils/logger.js";
-import { alertRoutingService } from "../services/alertRouting.service.js";
+import { alertRoutingService, type RouteableAlert } from "../services/alertRouting.service.js";
 import { duplicateAlertCheckService } from "../services/duplicateAlertCheck.service.js";
+import type { AlertEvent } from "../services/alert.service.js";
 
 const QUEUE_NAME = "bridge-monitor";
 
@@ -14,6 +15,21 @@ const connection = {
 };
 
 export const bridgeMonitorQueue = new Queue(QUEUE_NAME, { connection });
+
+function buildMismatchAlert(assetCode: string, supplyCheck: { mismatchPercentage?: number }): RouteableAlert {
+  return {
+    eventTime: new Date(),
+    alertRuleId: `bridge-monitor-${assetCode}`,
+    ownerAddress: "system",
+    ruleName: "Bridge Supply Mismatch",
+    assetCode,
+    sourceType: "supply_mismatch",
+    severity: "high",
+    triggeredValue: supplyCheck.mismatchPercentage ?? 0,
+    threshold: config.BRIDGE_MISMATCH_THRESHOLD ?? 0.01,
+    metric: "supply_mismatch_pct",
+  };
+}
 
 /**
  * Worker that continuously monitors bridge integrity:
