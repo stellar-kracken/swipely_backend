@@ -1,6 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import { config } from "../config/index.js";
-import { HealthService } from "../services/health.service.js";
+import { HealthService, type HealthScore } from "../services/health.service.js";
 import { logger } from "../utils/logger.js";
 import { alertRoutingService, type RouteableAlert } from "../services/alertRouting.service.js";
 import { duplicateAlertCheckService } from "../services/duplicateAlertCheck.service.js";
@@ -18,8 +18,6 @@ const connection = {
 };
 
 export const healthCheckQueue = new Queue(QUEUE_NAME, { connection });
-
-import type { HealthScore } from "../services/health.service.js";
 
 function buildDeterioratingAlert(score: HealthScore): RouteableAlert {
   return {
@@ -83,28 +81,29 @@ async function persistHealthScores(scores: HealthScore[]): Promise<void> {
   }
 }
 
+export async function processHealthCheckJob(job: { id?: string }) {
+  const healthService = new HealthService();
+  logger.info({ jobId: job.id }, "Processing health check job");
+
+  const scores = await healthService.computeAllHealthScores();
+
+  await persistHealthScores(scores);
+  await routeDeterioratingAlerts(scores);
+
+  logger.info({ assetCount: scores.length }, "Health check completed for all assets");
+  return { success: true, scores };
+}
+
 /**
  * Worker that periodically computes composite health scores for all
- * monitored assets and persists them for trending analysis.
+ * monitored assets, persists them to TimescaleDB, and triggers alerts
+ * for any asset whose trend has become deteriorating.
  */
 export const healthCheckWorker = new Worker(
   QUEUE_NAME,
   async (job) => {
-    const healthService = new HealthService();
-    logger.info({ jobId: job.id }, "Processing health check job");
-
     try {
-      const scores = await healthService.computeAllHealthScores();
-
-      // TODO: Persist health scores to TimescaleDB
-      // TODO: Detect deteriorating trends and trigger alerts
-
-      logger.info(
-        { assetCount: scores.length },
-        "Health check completed for all assets"
-      );
-
-      return { success: true, scores };
+      return await processHealthCheckJob(job);
     } catch (error) {
       logger.error({ error }, "Health check job failed");
       throw error;
