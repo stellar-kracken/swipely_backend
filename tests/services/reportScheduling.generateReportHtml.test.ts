@@ -184,6 +184,23 @@ describe("ReportSchedulingService.generateReportHtml", () => {
     });
   });
 
+  describe("asset rankings section", () => {
+    it("renders top asset symbol in the rankings table", async () => {
+      const html = await (service as any).generateReportHtml(makeDelivery());
+
+      expect(html).toContain("USDC");
+    });
+
+    it("shows fallback when asset rankings service fails", async () => {
+      getAssetRankingsMock.mockRejectedValueOnce(new Error("rate limit"));
+
+      const html = await (service as any).generateReportHtml(makeDelivery());
+
+      expect(html).toContain("Top Assets");
+      expect(html).toContain("Data unavailable");
+    });
+  });
+
   describe("all four services called", () => {
     it("calls all four data services when generating a report", async () => {
       await (service as any).generateReportHtml(makeDelivery());
