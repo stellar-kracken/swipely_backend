@@ -36,6 +36,33 @@ function buildDeterioratingAlert(score: HealthScore): RouteableAlert {
   };
 }
 
+async function routeDeterioratingAlerts(scores: HealthScore[]): Promise<void> {
+  const deteriorating = scores.filter((s) => s.trend === "deteriorating");
+  for (const score of deteriorating) {
+    const dedupEvent: Omit<AlertEvent, "eventId"> = {
+      ruleId: `health-check-${score.symbol}`,
+      assetCode: score.symbol,
+      alertType: "health_deterioration",
+      priority: score.overallScore < 0.3 ? "critical" : "high",
+      triggeredValue: score.overallScore,
+      threshold: config.HEALTH_SCORE_THRESHOLD ?? 0.5,
+      metric: "overall_health_score",
+      webhookDelivered: false,
+      onChainEventId: null,
+    };
+
+    const dedupResult = duplicateAlertCheckService.check(dedupEvent);
+
+    if (!dedupResult.isDuplicate || dedupResult.action !== "block") {
+      const alert = buildDeterioratingAlert(score);
+      await alertRoutingService.routeAlert(alert);
+      logger.info({ symbol: score.symbol, score: score.overallScore }, "Health deterioration alert routed");
+    } else {
+      logger.debug({ symbol: score.symbol, reason: dedupResult.reason }, "Health deterioration alert suppressed by deduplication");
+    }
+  }
+}
+
 async function persistHealthScores(scores: HealthScore[]): Promise<void> {
   const now = new Date();
   for (const score of scores) {
