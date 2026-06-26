@@ -210,6 +210,20 @@ describe("healthCheck.worker", () => {
       expect(routeAlertMock).toHaveBeenCalledOnce();
     });
 
+    it("routes one alert per deteriorating asset", async () => {
+      computeAllHealthScoresMock.mockResolvedValue([
+        makeScore("USDC", 0.4, "deteriorating"),
+        makeScore("EURC", 0.35, "deteriorating"),
+      ]);
+
+      await processHealthCheckJob({ id: "job-multi" });
+
+      expect(routeAlertMock).toHaveBeenCalledTimes(2);
+      const symbols = routeAlertMock.mock.calls.map((c) => c[0].assetCode);
+      expect(symbols).toContain("USDC");
+      expect(symbols).toContain("EURC");
+    });
+
     it("passes matching ruleId to both dedup check and alert routing", async () => {
       computeAllHealthScoresMock.mockResolvedValue([makeScore("EURC", 0.4, "deteriorating")]);
 
