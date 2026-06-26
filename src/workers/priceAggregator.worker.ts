@@ -74,39 +74,43 @@ async function persistAggregatedPrice(aggregated: AggregatedPrice): Promise<void
   }
 }
 
+export async function processPriceAggregatorJob(job: { id?: string; data: { symbol: string } }) {
+  const priceService = new PriceService();
+  logger.info({ jobId: job.id, data: job.data }, "Processing price aggregation job");
+
+  const { symbol } = job.data;
+
+  const aggregatedPrice = await priceService.getAggregatedPrice(symbol);
+  const deviation = await priceService.checkDeviation(symbol);
+
+  if (deviation.deviated) {
+    logger.warn({ symbol, deviation: deviation.percentage }, "Price deviation detected");
+    await routeDeviationAlert(symbol, deviation);
+  }
+
+  if (aggregatedPrice) {
+    await persistAggregatedPrice(aggregatedPrice);
+  }
+
+  return { success: true, symbol, price: aggregatedPrice };
+}
+
 /**
  * Worker that periodically aggregates prices from multiple sources:
  * - Stellar DEX (SDEX + AMM pools)
  * - Circle API
  * - Coinbase API
  *
- * Computes VWAP and checks for price deviations exceeding thresholds.
+ * Computes VWAP, persists source prices to TimescaleDB, and triggers alerts
+ * when cross-source deviation exceeds the configured threshold.
  */
 export const priceAggregatorWorker = new Worker(
   QUEUE_NAME,
   async (job) => {
-    const priceService = new PriceService();
-    logger.info({ jobId: job.id, data: job.data }, "Processing price aggregation job");
-
-    const { symbol } = job.data;
-
     try {
-      const aggregatedPrice = await priceService.getAggregatedPrice(symbol);
-
-      // Check for deviation
-      const deviation = await priceService.checkDeviation(symbol);
-      if (deviation.deviated) {
-        logger.warn(
-          { symbol, deviation: deviation.percentage },
-          "Price deviation detected"
-        );
-        // TODO: Trigger price deviation alert
-      }
-
-      // TODO: Persist aggregated price to TimescaleDB
-      return { success: true, symbol, price: aggregatedPrice };
+      return await processPriceAggregatorJob(job);
     } catch (error) {
-      logger.error({ error, symbol }, "Price aggregation job failed");
+      logger.error({ error, symbol: job.data?.symbol }, "Price aggregation job failed");
       throw error;
     }
   },
