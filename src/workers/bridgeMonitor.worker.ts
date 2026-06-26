@@ -5,6 +5,7 @@ import { logger } from "../utils/logger.js";
 import { alertRoutingService, type RouteableAlert } from "../services/alertRouting.service.js";
 import { duplicateAlertCheckService } from "../services/duplicateAlertCheck.service.js";
 import type { AlertEvent } from "../services/alert.service.js";
+import { getDatabase } from "../database/connection.js";
 
 const QUEUE_NAME = "bridge-monitor";
 
