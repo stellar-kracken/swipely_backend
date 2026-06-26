@@ -19,6 +19,21 @@ const connection = {
 
 export const priceAggregatorQueue = new Queue(QUEUE_NAME, { connection });
 
+function buildDeviationAlert(symbol: string, deviation: { deviated: boolean; percentage: number }): RouteableAlert {
+  return {
+    eventTime: new Date(),
+    alertRuleId: `price-aggregator-${symbol}`,
+    ownerAddress: "system",
+    ruleName: "Price Deviation",
+    assetCode: symbol,
+    sourceType: "price_deviation",
+    severity: deviation.percentage > (config.PRICE_DEVIATION_THRESHOLD ?? 0.02) * 2 ? "critical" : "high",
+    triggeredValue: deviation.percentage,
+    threshold: config.PRICE_DEVIATION_THRESHOLD ?? 0.02,
+    metric: "price_deviation_pct",
+  };
+}
+
 async function persistAggregatedPrice(aggregated: AggregatedPrice): Promise<void> {
   try {
     const now = new Date();
