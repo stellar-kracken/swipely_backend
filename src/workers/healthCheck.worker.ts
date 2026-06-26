@@ -2,6 +2,10 @@ import { Worker, Queue } from "bullmq";
 import { config } from "../config/index.js";
 import { HealthService } from "../services/health.service.js";
 import { logger } from "../utils/logger.js";
+import { alertRoutingService, type RouteableAlert } from "../services/alertRouting.service.js";
+import { duplicateAlertCheckService } from "../services/duplicateAlertCheck.service.js";
+import type { AlertEvent } from "../services/alert.service.js";
+import { HealthScoreModel } from "../database/models/healthScore.model.js";
 
 const QUEUE_NAME = "health-check";
 
