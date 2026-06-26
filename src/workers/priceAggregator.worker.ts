@@ -58,6 +58,11 @@ async function routeDeviationAlert(symbol: string, deviation: { deviated: boolea
   }
 }
 
+/**
+ * Batch-inserts one row per price source into the prices TimescaleDB hypertable.
+ * Columns: time (now), symbol, source, price, volume_24h (null — not returned by aggregation).
+ * Errors are swallowed so a DB outage never prevents the alert routing path from running.
+ */
 async function persistAggregatedPrice(aggregated: AggregatedPrice): Promise<void> {
   try {
     const now = new Date();
