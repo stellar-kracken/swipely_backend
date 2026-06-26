@@ -9,6 +9,8 @@ import { HealthScoreModel } from "../database/models/healthScore.model.js";
 
 const QUEUE_NAME = "health-check";
 
+const healthScoreModel = new HealthScoreModel();
+
 const connection = {
   host: config.REDIS_HOST,
   port: config.REDIS_PORT,
@@ -16,6 +18,28 @@ const connection = {
 };
 
 export const healthCheckQueue = new Queue(QUEUE_NAME, { connection });
+
+import type { HealthScore } from "../services/health.service.js";
+
+async function persistHealthScores(scores: HealthScore[]): Promise<void> {
+  const now = new Date();
+  for (const score of scores) {
+    try {
+      await healthScoreModel.insert({
+        time: now,
+        symbol: score.symbol,
+        overall_score: score.overallScore,
+        liquidity_depth_score: score.factors.liquidityDepth,
+        price_stability_score: score.factors.priceStability,
+        bridge_uptime_score: score.factors.bridgeUptime,
+        reserve_backing_score: score.factors.reserveBacking,
+        volume_trend_score: score.factors.volumeTrend,
+      });
+    } catch (err) {
+      logger.error({ err, symbol: score.symbol }, "Failed to persist health score");
+    }
+  }
+}
 
 /**
  * Worker that periodically computes composite health scores for all
