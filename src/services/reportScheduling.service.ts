@@ -350,6 +350,105 @@ export class ReportSchedulingService {
     return { start, end };
   }
 
+  private async buildProtocolStatsSection(): Promise<string> {
+    try {
+      const stats = await this.analyticsService.getProtocolStats();
+      return `
+        <section>
+          <h2>Protocol Overview</h2>
+          <table>
+            <tr><th>Metric</th><th>Value</th></tr>
+            <tr><td>Total Value Locked</td><td>${stats.totalValueLocked}</td></tr>
+            <tr><td>24h Volume</td><td>${stats.totalVolume24h}</td></tr>
+            <tr><td>7d Volume</td><td>${stats.totalVolume7d}</td></tr>
+            <tr><td>Active Bridges</td><td>${stats.activeBridges}</td></tr>
+            <tr><td>Active Assets</td><td>${stats.activeAssets}</td></tr>
+            <tr><td>Avg Health Score</td><td>${(stats.averageHealthScore * 100).toFixed(1)}%</td></tr>
+            <tr><td>24h Transactions</td><td>${stats.totalTransactions24h.toLocaleString()}</td></tr>
+          </table>
+        </section>`;
+    } catch (err) {
+      logger.warn({ err }, "Failed to load protocol stats for report");
+      return "<section><h2>Protocol Overview</h2><p>Data unavailable.</p></section>";
+    }
+  }
+
+  private async buildAssetRankingsSection(): Promise<string> {
+    try {
+      const rankings = await this.analyticsService.getAssetRankings();
+      const rows = rankings
+        .slice(0, 10)
+        .map(
+          (a) =>
+            `<tr><td>${a.rank}</td><td>${a.symbol}</td><td>${a.tvl}</td><td>${a.volume24h}</td><td>${(a.healthScore * 100).toFixed(1)}%</td><td>${a.trend}</td></tr>`
+        )
+        .join("");
+      return `
+        <section>
+          <h2>Top Assets</h2>
+          <table>
+            <tr><th>#</th><th>Symbol</th><th>TVL</th><th>24h Vol</th><th>Health</th><th>Trend</th></tr>
+            ${rows}
+          </table>
+        </section>`;
+    } catch (err) {
+      logger.warn({ err }, "Failed to load asset rankings for report");
+      return "<section><h2>Top Assets</h2><p>Data unavailable.</p></section>";
+    }
+  }
+
+  private async buildAlertSummarySection(periodStart: Date, periodEnd: Date): Promise<string> {
+    try {
+      const alerts = await this.alertService.getRecentAlerts(50);
+      const inPeriod = alerts.filter(
+        (a) => a.time >= periodStart && a.time <= periodEnd
+      );
+      const byPriority = inPeriod.reduce<Record<string, number>>((acc, a) => {
+        acc[a.priority] = (acc[a.priority] ?? 0) + 1;
+        return acc;
+      }, {});
+      const summaryRows = Object.entries(byPriority)
+        .sort(([a], [b]) => ["critical", "high", "medium", "low"].indexOf(a) - ["critical", "high", "medium", "low"].indexOf(b))
+        .map(([priority, count]) => `<tr><td>${priority}</td><td>${count}</td></tr>`)
+        .join("");
+      return `
+        <section>
+          <h2>Alert Summary</h2>
+          <p>Total alerts in period: <strong>${inPeriod.length}</strong></p>
+          <table>
+            <tr><th>Priority</th><th>Count</th></tr>
+            ${summaryRows || "<tr><td colspan='2'>No alerts in this period</td></tr>"}
+          </table>
+        </section>`;
+    } catch (err) {
+      logger.warn({ err }, "Failed to load alert summary for report");
+      return "<section><h2>Alert Summary</h2><p>Data unavailable.</p></section>";
+    }
+  }
+
+  private async buildReconciliationSection(): Promise<string> {
+    try {
+      const drifts = await this.reconciliationService.getDriftSummaries({ limit: 10 });
+      const rows = drifts
+        .map(
+          (d) =>
+            `<tr><td>${d.assetCode}</td><td>${d.bridgeName}</td><td>${d.severity}</td><td>${d.latestRun.mismatchPercentage != null ? (d.latestRun.mismatchPercentage * 100).toFixed(3) + "%" : "—"}</td></tr>`
+        )
+        .join("");
+      return `
+        <section>
+          <h2>Reconciliation</h2>
+          <table>
+            <tr><th>Asset</th><th>Bridge</th><th>Severity</th><th>Mismatch</th></tr>
+            ${rows || "<tr><td colspan='4'>No drift detected</td></tr>"}
+          </table>
+        </section>`;
+    } catch (err) {
+      logger.warn({ err }, "Failed to load reconciliation data for report");
+      return "<section><h2>Reconciliation</h2><p>Data unavailable.</p></section>";
+    }
+  }
+
   /** Placeholder for report HTML generation – in a real system this would render a template */
   private async generateReportHtml(delivery: ReportDelivery): Promise<string> {
     const periodLabel = `${delivery.periodStart.toISOString().slice(0, 10)} - ${delivery.periodEnd
