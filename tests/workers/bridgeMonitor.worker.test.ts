@@ -164,5 +164,43 @@ describe("bridgeMonitor.worker", () => {
 
       expect(result.success).toBe(true);
     });
+
+    it("persists stellar and evm supply values when present", async () => {
+      verifySupplyMock.mockResolvedValue({
+        match: false,
+        mismatchPercentage: 0.02,
+        stellarSupply: 1_000_000,
+        evmSupply: 980_000,
+      });
+
+      await processMonitorJob({ id: "job-10", data: { assetCode: "USDC" } } as any);
+
+      expect(dbInsertMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stellar_supply: 1_000_000,
+          evm_supply: 980_000,
+        })
+      );
+    });
+  });
+
+  describe("alert routing resilience", () => {
+    it("throws and propagates error when routeAlert fails", async () => {
+      verifySupplyMock.mockResolvedValue({ match: false, mismatchPercentage: 0.05 });
+      routeAlertMock.mockRejectedValueOnce(new Error("alert service unavailable"));
+
+      await expect(
+        processMonitorJob({ id: "job-11", data: { assetCode: "USDC" } } as any)
+      ).rejects.toThrow("alert service unavailable");
+    });
+
+    it("returns supplyCheck data in the result object", async () => {
+      const supplyCheck = { match: true, mismatchPercentage: 0, stellarSupply: 500_000, evmSupply: 500_000 };
+      verifySupplyMock.mockResolvedValue(supplyCheck);
+
+      const result = await processMonitorJob({ id: "job-12", data: { assetCode: "EURC" } } as any);
+
+      expect(result.supplyCheck).toMatchObject(supplyCheck);
+    });
   });
 });
