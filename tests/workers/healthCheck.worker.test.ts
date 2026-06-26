@@ -174,6 +174,23 @@ describe("healthCheck.worker", () => {
     });
   });
 
+  describe("error propagation", () => {
+    it("throws when computeAllHealthScores fails", async () => {
+      computeAllHealthScoresMock.mockRejectedValueOnce(new Error("health service down"));
+
+      await expect(processHealthCheckJob({ id: "job-err" })).rejects.toThrow("health service down");
+    });
+
+    it("does not persist or alert when health service fails", async () => {
+      computeAllHealthScoresMock.mockRejectedValueOnce(new Error("timeout"));
+
+      await expect(processHealthCheckJob({ id: "job-err2" })).rejects.toThrow();
+
+      expect(insertHealthScoreMock).not.toHaveBeenCalled();
+      expect(routeAlertMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("deduplication", () => {
     it("suppresses alert when dedup check blocks", async () => {
       computeAllHealthScoresMock.mockResolvedValue([makeScore("USDC", 0.4, "deteriorating")]);
