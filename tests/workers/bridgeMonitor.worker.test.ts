@@ -184,6 +184,19 @@ describe("bridgeMonitor.worker", () => {
     });
   });
 
+  describe("alert rule ID consistency", () => {
+    it("uses the same ruleId for dedup check and alert routing", async () => {
+      verifySupplyMock.mockResolvedValue({ match: false, mismatchPercentage: 0.04 });
+
+      await processMonitorJob({ id: "job-13", data: { assetCode: "USDC" } } as any);
+
+      const dedupCall = checkDedupMock.mock.calls[0][0];
+      const alertCall = routeAlertMock.mock.calls[0][0];
+      expect(dedupCall.ruleId).toBe(alertCall.alertRuleId);
+      expect(dedupCall.ruleId).toBe("bridge-monitor-USDC");
+    });
+  });
+
   describe("alert routing resilience", () => {
     it("throws and propagates error when routeAlert fails", async () => {
       verifySupplyMock.mockResolvedValue({ match: false, mismatchPercentage: 0.05 });
