@@ -234,5 +234,16 @@ describe("healthCheck.worker", () => {
       expect(dedupCall.ruleId).toBe("health-check-EURC");
       expect(alertCall.alertRuleId).toBe("health-check-EURC");
     });
+
+    it("triggeredValue in dedup event and alert matches the actual overallScore", async () => {
+      computeAllHealthScoresMock.mockResolvedValue([makeScore("USDC", 0.45, "deteriorating")]);
+
+      await processHealthCheckJob({ id: "job-12" });
+
+      const dedupCall = checkDedupMock.mock.calls[0][0];
+      const alertCall = routeAlertMock.mock.calls[0][0];
+      expect(dedupCall.triggeredValue).toBeCloseTo(0.45);
+      expect(alertCall.triggeredValue).toBeCloseTo(0.45);
+    });
   });
 });
