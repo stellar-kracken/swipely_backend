@@ -1,7 +1,11 @@
 import { Worker, Queue } from "bullmq";
 import { config } from "../config/index.js";
-import { PriceService } from "../services/price.service.js";
+import { PriceService, type AggregatedPrice } from "../services/price.service.js";
 import { logger } from "../utils/logger.js";
+import { alertRoutingService, type RouteableAlert } from "../services/alertRouting.service.js";
+import { duplicateAlertCheckService } from "../services/duplicateAlertCheck.service.js";
+import type { AlertEvent } from "../services/alert.service.js";
+import { PriceModel } from "../database/models/price.model.js";
 
 const QUEUE_NAME = "price-aggregator";
 
