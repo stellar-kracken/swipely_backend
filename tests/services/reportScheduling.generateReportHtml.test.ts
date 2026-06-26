@@ -239,4 +239,19 @@ describe("ReportSchedulingService.generateReportHtml", () => {
       expect(html).toContain("Data unavailable");
     });
   });
+
+  describe("full degradation resilience", () => {
+    it("returns a valid HTML document even when all four data services fail", async () => {
+      getProtocolStatsMock.mockRejectedValueOnce(new Error("down"));
+      getAssetRankingsMock.mockRejectedValueOnce(new Error("down"));
+      getRecentAlertsMock.mockRejectedValueOnce(new Error("down"));
+      getDriftSummariesMock.mockRejectedValueOnce(new Error("down"));
+
+      const html = await (service as any).generateReportHtml(makeDelivery());
+
+      expect(html).toContain("<!DOCTYPE html>");
+      expect(html).toContain("Bridge-Watch Report");
+      expect(html.match(/Data unavailable/g)?.length).toBe(4);
+    });
+  });
 });
