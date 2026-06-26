@@ -184,6 +184,17 @@ describe("ReportSchedulingService.generateReportHtml", () => {
     });
   });
 
+  describe("all four services called", () => {
+    it("calls all four data services when generating a report", async () => {
+      await (service as any).generateReportHtml(makeDelivery());
+
+      expect(getProtocolStatsMock).toHaveBeenCalledOnce();
+      expect(getAssetRankingsMock).toHaveBeenCalledOnce();
+      expect(getRecentAlertsMock).toHaveBeenCalledWith(50);
+      expect(getDriftSummariesMock).toHaveBeenCalledWith({ limit: 10 });
+    });
+  });
+
   describe("reconciliation section", () => {
     it("renders drift data when available", async () => {
       getDriftSummariesMock.mockResolvedValue(makeDrifts());
