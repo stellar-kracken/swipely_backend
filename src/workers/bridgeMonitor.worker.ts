@@ -52,6 +52,49 @@ function buildMismatchAlert(assetCode: string, supplyCheck: { mismatchPercentage
 }
 
 /**
+ * Core processor for a single bridge monitor job.
+ * Exported for unit testing without spinning up the BullMQ worker.
+ */
+export async function processMonitorJob(job: { id?: string; data: { assetCode: string } }) {
+  const bridgeService = new BridgeService();
+  logger.info({ jobId: job.id, data: job.data }, "Processing bridge monitor job");
+
+  const { assetCode } = job.data;
+
+  // Verify supply consistency
+  const supplyCheck = await bridgeService.verifySupply(assetCode);
+
+  if (!supplyCheck.match) {
+    logger.warn({ ...supplyCheck }, "Bridge supply mismatch detected");
+
+    const dedupEvent: Omit<AlertEvent, "eventId"> = {
+      ruleId: `bridge-monitor-${assetCode}`,
+      assetCode,
+      alertType: "supply_mismatch",
+      priority: "high",
+      triggeredValue: supplyCheck.mismatchPercentage ?? 0,
+      threshold: config.BRIDGE_MISMATCH_THRESHOLD ?? 0.01,
+      metric: "supply_mismatch_pct",
+      webhookDelivered: false,
+      onChainEventId: null,
+    };
+
+    const dedupResult = duplicateAlertCheckService.check(dedupEvent);
+
+    if (!dedupResult.isDuplicate || dedupResult.action !== "block") {
+      const alert = buildMismatchAlert(assetCode, supplyCheck);
+      await alertRoutingService.routeAlert(alert);
+      logger.info({ assetCode }, "Supply mismatch alert routed");
+    } else {
+      logger.debug({ assetCode, reason: dedupResult.reason }, "Mismatch alert suppressed by deduplication");
+    }
+  }
+
+  await persistMonitorResult(assetCode, supplyCheck);
+  return { success: true, assetCode, supplyCheck };
+}
+
+/**
  * Worker that continuously monitors bridge integrity:
  * - Tracks mint/burn events on Stellar
  * - Verifies supply consistency across chains
@@ -61,45 +104,10 @@ function buildMismatchAlert(assetCode: string, supplyCheck: { mismatchPercentage
 export const bridgeMonitorWorker = new Worker(
   QUEUE_NAME,
   async (job) => {
-    const bridgeService = new BridgeService();
-    logger.info({ jobId: job.id, data: job.data }, "Processing bridge monitor job");
-
-    const { assetCode } = job.data;
-
     try {
-      // Verify supply consistency
-      const supplyCheck = await bridgeService.verifySupply(assetCode);
-
-      if (!supplyCheck.match) {
-        logger.warn({ ...supplyCheck }, "Bridge supply mismatch detected");
-
-        const dedupEvent: Omit<AlertEvent, "eventId"> = {
-          ruleId: `bridge-monitor-${assetCode}`,
-          assetCode,
-          alertType: "supply_mismatch",
-          priority: "high",
-          triggeredValue: supplyCheck.mismatchPercentage ?? 0,
-          threshold: config.BRIDGE_MISMATCH_THRESHOLD ?? 0.01,
-          metric: "supply_mismatch_pct",
-          webhookDelivered: false,
-          onChainEventId: null,
-        };
-
-        const dedupResult = duplicateAlertCheckService.check(dedupEvent);
-
-        if (!dedupResult.isDuplicate || dedupResult.action !== "block") {
-          const alert = buildMismatchAlert(assetCode, supplyCheck);
-          await alertRoutingService.routeAlert(alert);
-          logger.info({ assetCode }, "Supply mismatch alert routed");
-        } else {
-          logger.debug({ assetCode, reason: dedupResult.reason }, "Mismatch alert suppressed by deduplication");
-        }
-      }
-
-      await persistMonitorResult(assetCode, supplyCheck);
-      return { success: true, assetCode, supplyCheck };
+      return await processMonitorJob(job);
     } catch (error) {
-      logger.error({ error, assetCode }, "Bridge monitor job failed");
+      logger.error({ error, assetCode: job.data?.assetCode }, "Bridge monitor job failed");
       throw error;
     }
   },
