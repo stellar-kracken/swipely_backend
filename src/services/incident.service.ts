@@ -210,6 +210,16 @@ export class IncidentService {
     return this.mapRow(row);
   }
 
+  async updateIncidentSeverity(id: string, severity: IncidentSeverity): Promise<BridgeIncident | null> {
+    const [row] = await this.db("bridge_incidents")
+      .where("id", id)
+      .update({ severity, updated_at: new Date() })
+      .returning("*");
+    if (!row) return null;
+    logger.info({ incidentId: id, severity }, "Bridge incident severity updated");
+    return this.mapRow(row);
+  }
+
   async markRead(incidentId: string, userSession: string): Promise<void> {
     await this.db("bridge_incident_reads")
       .insert({ incident_id: incidentId, user_session: userSession })

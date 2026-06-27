@@ -764,7 +764,24 @@ export class TelegramBotService {
       return true;
     }
 
-    // TODO: Check application role system here when available
+    // Check the application role system: operator or super_admin with a linked telegram_chat_id
+    try {
+      const row = await this.db("admin_accounts")
+        .where("telegram_chat_id", chatId)
+        .where("is_active", true)
+        .first();
+
+      if (row) {
+        const roles: string[] = Array.isArray(row.roles) ? row.roles : JSON.parse(row.roles ?? "[]");
+        if (roles.includes("operator") || roles.includes("super_admin")) {
+          logger.debug({ chatId }, "Admin access granted via application role system");
+          return true;
+        }
+      }
+    } catch (err) {
+      logger.warn({ chatId, err }, "Role system check failed, denying access");
+    }
+
     return false;
   }
 
