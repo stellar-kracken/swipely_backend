@@ -2,6 +2,9 @@ import crypto from "crypto";
 import { getDatabase } from "../database/connection.js";
 import { logger } from "../utils/logger.js";
 import { EmailNotificationService, EmailRecipient, EmailReportPayload } from "./email.service.js";
+import { AnalyticsService } from "./analytics.service.js";
+import { AlertService } from "./alert.service.js";
+import { ReconciliationService } from "./reconciliation.service.js";
 
 // =============================================================================
 // TYPES & INTERFACES
@@ -61,9 +64,15 @@ const DEFAULT_PREFERRED_HOUR = 9; // 9 AM
 export class ReportSchedulingService {
   private static instance: ReportSchedulingService;
   private emailService: EmailNotificationService;
+  private analyticsService: AnalyticsService;
+  private alertService: AlertService;
+  private reconciliationService: ReconciliationService;
 
   private constructor() {
     this.emailService = new EmailNotificationService();
+    this.analyticsService = new AnalyticsService();
+    this.alertService = new AlertService();
+    this.reconciliationService = new ReconciliationService();
   }
 
   public static getInstance(): ReportSchedulingService {
@@ -341,12 +350,150 @@ export class ReportSchedulingService {
     return { start, end };
   }
 
-  /** Placeholder for report HTML generation – in a real system this would render a template */
+  private async buildProtocolStatsSection(): Promise<string> {
+    try {
+      const stats = await this.analyticsService.getProtocolStats();
+      return `
+        <section>
+          <h2>Protocol Overview</h2>
+          <table>
+            <tr><th>Metric</th><th>Value</th></tr>
+            <tr><td>Total Value Locked</td><td>${stats.totalValueLocked}</td></tr>
+            <tr><td>24h Volume</td><td>${stats.totalVolume24h}</td></tr>
+            <tr><td>7d Volume</td><td>${stats.totalVolume7d}</td></tr>
+            <tr><td>Active Bridges</td><td>${stats.activeBridges}</td></tr>
+            <tr><td>Active Assets</td><td>${stats.activeAssets}</td></tr>
+            <tr><td>Avg Health Score</td><td>${(stats.averageHealthScore * 100).toFixed(1)}%</td></tr>
+            <tr><td>24h Transactions</td><td>${stats.totalTransactions24h.toLocaleString()}</td></tr>
+          </table>
+        </section>`;
+    } catch (err) {
+      logger.warn({ err }, "Failed to load protocol stats for report");
+      return "<section><h2>Protocol Overview</h2><p>Data unavailable.</p></section>";
+    }
+  }
+
+  private async buildAssetRankingsSection(): Promise<string> {
+    try {
+      const rankings = await this.analyticsService.getAssetRankings();
+      const rows = rankings
+        .slice(0, 10)
+        .map(
+          (a) =>
+            `<tr><td>${a.rank}</td><td>${a.symbol}</td><td>${a.tvl}</td><td>${a.volume24h}</td><td>${(a.healthScore * 100).toFixed(1)}%</td><td>${a.trend}</td></tr>`
+        )
+        .join("");
+      return `
+        <section>
+          <h2>Top Assets</h2>
+          <table>
+            <tr><th>#</th><th>Symbol</th><th>TVL</th><th>24h Vol</th><th>Health</th><th>Trend</th></tr>
+            ${rows}
+          </table>
+        </section>`;
+    } catch (err) {
+      logger.warn({ err }, "Failed to load asset rankings for report");
+      return "<section><h2>Top Assets</h2><p>Data unavailable.</p></section>";
+    }
+  }
+
+  private async buildAlertSummarySection(periodStart: Date, periodEnd: Date): Promise<string> {
+    try {
+      const alerts = await this.alertService.getRecentAlerts(50);
+      const inPeriod = alerts.filter(
+        (a) => a.time >= periodStart && a.time <= periodEnd
+      );
+      const byPriority = inPeriod.reduce<Record<string, number>>((acc, a) => {
+        acc[a.priority] = (acc[a.priority] ?? 0) + 1;
+        return acc;
+      }, {});
+      const summaryRows = Object.entries(byPriority)
+        .sort(([a], [b]) => ["critical", "high", "medium", "low"].indexOf(a) - ["critical", "high", "medium", "low"].indexOf(b))
+        .map(([priority, count]) => `<tr><td>${priority}</td><td>${count}</td></tr>`)
+        .join("");
+      return `
+        <section>
+          <h2>Alert Summary</h2>
+          <p>Total alerts in period: <strong>${inPeriod.length}</strong></p>
+          <table>
+            <tr><th>Priority</th><th>Count</th></tr>
+            ${summaryRows || "<tr><td colspan='2'>No alerts in this period</td></tr>"}
+          </table>
+        </section>`;
+    } catch (err) {
+      logger.warn({ err }, "Failed to load alert summary for report");
+      return "<section><h2>Alert Summary</h2><p>Data unavailable.</p></section>";
+    }
+  }
+
+  private async buildReconciliationSection(): Promise<string> {
+    try {
+      const drifts = await this.reconciliationService.getDriftSummaries({ limit: 10 });
+      const rows = drifts
+        .map(
+          (d) =>
+            `<tr><td>${d.assetCode}</td><td>${d.bridgeName}</td><td>${d.severity}</td><td>${d.latestRun.mismatchPercentage != null ? (d.latestRun.mismatchPercentage * 100).toFixed(3) + "%" : "—"}</td></tr>`
+        )
+        .join("");
+      return `
+        <section>
+          <h2>Reconciliation</h2>
+          <table>
+            <tr><th>Asset</th><th>Bridge</th><th>Severity</th><th>Mismatch</th></tr>
+            ${rows || "<tr><td colspan='4'>No drift detected</td></tr>"}
+          </table>
+        </section>`;
+    } catch (err) {
+      logger.warn({ err }, "Failed to load reconciliation data for report");
+      return "<section><h2>Reconciliation</h2><p>Data unavailable.</p></section>";
+    }
+  }
+
+  /**
+   * Builds a fully-rendered HTML email report by fetching live data from four services
+   * in parallel: protocol stats, asset rankings, recent alerts (filtered to the delivery
+   * period), and reconciliation drift summaries.  Each section falls back to a
+   * "Data unavailable" placeholder if its upstream service call fails, so a single
+   * degraded dependency never prevents the report from being sent.
+   */
   private async generateReportHtml(delivery: ReportDelivery): Promise<string> {
-    const periodLabel = `${delivery.periodStart.toISOString().slice(0, 10)} - ${delivery.periodEnd
+    const periodLabel = `${delivery.periodStart.toISOString().slice(0, 10)} – ${delivery.periodEnd
       .toISOString()
       .slice(0, 10)}`;
-    return `<html><body><h1>Report (${periodLabel})</h1><p>Generated report content goes here.</p></body></html>`;
+
+    const [protocolStats, assetRankings, alertSummary, reconciliation] = await Promise.all([
+      this.buildProtocolStatsSection(),
+      this.buildAssetRankingsSection(),
+      this.buildAlertSummarySection(delivery.periodStart, delivery.periodEnd),
+      this.buildReconciliationSection(),
+    ]);
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bridge-Watch Report – ${periodLabel}</title>
+  <style>
+    body { font-family: sans-serif; color: #222; max-width: 900px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 1.6rem; border-bottom: 2px solid #0a6; padding-bottom: 8px; }
+    h2 { font-size: 1.1rem; color: #555; margin-top: 32px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border: 1px solid #ddd; padding: 6px 12px; text-align: left; font-size: 0.9rem; }
+    th { background: #f4f4f4; }
+    section { margin-bottom: 32px; }
+    footer { font-size: 0.75rem; color: #aaa; margin-top: 48px; }
+  </style>
+</head>
+<body>
+  <h1>Bridge-Watch Report</h1>
+  <p><strong>Period:</strong> ${periodLabel}</p>
+  ${protocolStats}
+  ${assetRankings}
+  ${alertSummary}
+  ${reconciliation}
+  <footer>Generated by Bridge-Watch · ${delivery.frequency} report for ${delivery.email}</footer>
+</body>
+</html>`;
   }
 
   // ---------------------------------------------------------------------------
