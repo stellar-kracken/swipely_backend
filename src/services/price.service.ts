@@ -9,6 +9,7 @@ import {
 } from "../utils/stellar.js";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { CircleSource } from "./sources/circle.source.js";
+import { PriceModel } from "../database/models/price.model.js";
 
 export class PriceFetchError extends Error {
   constructor(
@@ -358,7 +359,22 @@ export class PriceService {
     interval: "1h" | "1d" | "7d" | "30d"
   ): Promise<{ timestamp: string; price: number }[]> {
     logger.info({ symbol, interval }, "Fetching historical prices");
-    // TODO: Query TimescaleDB for time-bucketed price data
-    return [];
+
+    const intervalConfig: Record<"1h" | "1d" | "7d" | "30d", { bucket: string; lookbackMs: number }> = {
+      "1h":  { bucket: "5 minutes",  lookbackMs: 60 * 60 * 1000 },
+      "1d":  { bucket: "1 hour",     lookbackMs: 24 * 60 * 60 * 1000 },
+      "7d":  { bucket: "6 hours",    lookbackMs: 7 * 24 * 60 * 60 * 1000 },
+      "30d": { bucket: "1 day",      lookbackMs: 30 * 24 * 60 * 60 * 1000 },
+    };
+
+    const { bucket, lookbackMs } = intervalConfig[interval];
+    const startTime = new Date(Date.now() - lookbackMs);
+    const priceModel = new PriceModel();
+
+    const rows = await priceModel.getTimeBucketed(symbol.toUpperCase(), bucket, startTime);
+    return rows.map((r) => ({
+      timestamp: new Date(r.bucket).toISOString(),
+      price: Number(r.avg_price),
+    }));
   }
 }

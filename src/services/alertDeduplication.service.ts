@@ -57,8 +57,8 @@ export class AlertDeduplicationService {
       // Escalate severity if needed.
       const newSeverity = this.escalateSeverity(matching.severity, event.priority);
       if (newSeverity !== matching.severity) {
-        await this.incidentService.updateIncidentStatus(matching.id, "investigating"); // placeholder for severity update
-        // In a full implementation we would update the severity field.
+        await this.incidentService.updateIncidentSeverity(matching.id, newSeverity as any);
+        await this.incidentService.updateIncidentStatus(matching.id, "investigating");
       }
       logger.info({ incidentId: matching.id, alertId: event.eventId }, "Alert deduplicated into existing incident");
       return matching;
@@ -66,7 +66,7 @@ export class AlertDeduplicationService {
 
     // No matching incident – create a new one.
     const payload = {
-      bridgeId: "unknown", // Bridge id may be derived elsewhere; placeholder.
+      bridgeId: `bridge-${event.assetCode.toLowerCase()}`,
       assetCode: event.assetCode,
       severity: event.priority as any, // map priority to severity directly.
       title: `Alert: ${event.alertType} on ${event.assetCode}`,
