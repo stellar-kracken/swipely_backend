@@ -1,8 +1,8 @@
 {
-  "name": "backend",
+  "name": "swipely-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Stellar Bridge Watch backend API and monitoring services",
+  "description": "Swipely backend API and monitoring services",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
