@@ -117,6 +117,7 @@ const envSchema = z.object({
   // Alert Thresholds
   PRICE_DEVIATION_THRESHOLD: z.coerce.number().default(0.02),
   BRIDGE_SUPPLY_MISMATCH_THRESHOLD: z.coerce.number().default(0.1),
+  HEALTH_SCORE_THRESHOLD: z.coerce.number().default(0.5),
 
   // Verification & Retries
   RETRY_MAX: z.coerce.number().default(3),

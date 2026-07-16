@@ -31,6 +31,7 @@ type PreferenceDefaultsRow = {
   category: PreferenceCategory;
   pref_key: string;
   value: unknown;
+  schema_version?: number;
 };
 
 export interface EffectivePreferences {

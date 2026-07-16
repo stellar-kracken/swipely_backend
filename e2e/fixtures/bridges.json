@@ -1,0 +1,28 @@
+{
+  "bridges": [
+    {
+      "name": "Circle",
+      "status": "healthy",
+      "totalValueLocked": 500000000,
+      "supplyOnStellar": 400000000,
+      "supplyOnSource": 400000000,
+      "mismatchPercentage": 0.05
+    },
+    {
+      "name": "Allbridge",
+      "status": "degraded",
+      "totalValueLocked": 120000000,
+      "supplyOnStellar": 90000000,
+      "supplyOnSource": 95000000,
+      "mismatchPercentage": 5.26
+    },
+    {
+      "name": "Wormhole",
+      "status": "unknown",
+      "totalValueLocked": 10000000,
+      "supplyOnStellar": 5000000,
+      "supplyOnSource": 8000000,
+      "mismatchPercentage": 37.5
+    }
+  ]
+}

@@ -1,40 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createMockDb } from "../helpers/knexMock.js";
 import { EscalationService } from "../../src/services/escalation.service.js";
 import type { Incident, EscalationRule } from "../../src/services/escalation.service.js";
 
-const mockDb = () => {
-  const store = {
-    incidents: [] as any[],
-    escalation_rules: [] as any[],
-    escalation_history: [] as any[],
-  };
-
-  const createQuery = (table: string) => {
-    const query: any = {
-      where: vi.fn().mockReturnThis(),
-      whereIn: vi.fn().mockReturnThis(),
-      orderBy: vi.fn().mockReturnThis(),
-      first: vi.fn(async () => {
-        const items = store[table as keyof typeof store];
-        return items.length > 0 ? items[0] : null;
-      }),
-      insert: vi.fn(async (data: any) => {
-        store[table as keyof typeof store].push(data);
-        return [data];
-      }),
-      update: vi.fn(async () => 1),
-      select: vi.fn().mockReturnThis(),
-    };
-    return query;
-  };
-
-  const db: any = (table: string) => createQuery(table);
-  db.raw = vi.fn();
-  db.fn = { now: () => new Date() };
-  db.__store = store;
-
-  return db;
-};
+const mockDb = () =>
+  createMockDb(["incidents", "escalation_rules", "escalation_history"]);
 
 vi.mock("../../src/database/connection.js", () => ({
   getDatabase: vi.fn(),
@@ -392,7 +362,7 @@ describe("EscalationService", () => {
         },
       ];
 
-      db("escalation_rules").orderBy.mockResolvedValueOnce(mockRules);
+      db.__store.escalation_rules.push(...mockRules);
 
       const rules = await service.getAllRules();
 
@@ -468,8 +438,8 @@ describe("EscalationService", () => {
         route_to: JSON.stringify([]),
       };
 
-      db("incidents").first.mockResolvedValueOnce(incident);
-      db("escalation_rules").first.mockResolvedValueOnce(rule);
+      db("incidents").first.mockResolvedValue(incident);
+      db("escalation_rules").first.mockResolvedValue(rule);
 
       await service["monitorIncident"]("incident-123");
 
@@ -518,8 +488,8 @@ describe("EscalationService", () => {
         route_to: JSON.stringify([]),
       };
 
-      db("incidents").first.mockResolvedValueOnce(incident);
-      db("escalation_rules").first.mockResolvedValueOnce(rule);
+      db("incidents").first.mockResolvedValue(incident);
+      db("escalation_rules").first.mockResolvedValue(rule);
 
       await service["monitorIncident"]("incident-123");
 

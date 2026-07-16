@@ -1,0 +1,22 @@
+{
+  "assets": [
+    {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "sourceChain": "ethereum",
+      "issuerAddress": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+    },
+    {
+      "symbol": "USDT",
+      "name": "Tether USD",
+      "sourceChain": "ethereum",
+      "issuerAddress": "GCQTGZQQ5G4PTM2GL7CDIFKUBIPEC52BROAQIAPW53XBRJVN6ZJVTG6V"
+    },
+    {
+      "symbol": "wETH",
+      "name": "Wrapped Ether",
+      "sourceChain": "ethereum"
+    }
+  ],
+  "total": 3
+}

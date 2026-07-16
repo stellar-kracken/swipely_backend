@@ -8,56 +8,69 @@ const mockDb = () => {
   };
 
   const createQuery = (table: string) => {
+    // The builder is both chainable (methods return the builder) and awaitable
+    // (a `then` makes `await db(table)...` resolve to the pending result), which
+    // mirrors how a real Knex query builder behaves.
+    const UNSET = Symbol("unset");
+    const rowsOf = () => (store[table as keyof typeof store] as any[]) || [];
+    let result: any = UNSET;
+
     const query: any = {
-      where: vi.fn().mockReturnThis(),
-      whereIn: vi.fn().mockReturnThis(),
-      orderBy: vi.fn(function (this: any) {
-        return this;
-      }),
-      select: vi.fn(function (this: any) {
-        return store[table as keyof typeof store] || [];
+      where: vi.fn(() => query),
+      whereIn: vi.fn(() => query),
+      orderBy: vi.fn(() => query),
+      limit: vi.fn(() => query),
+      select: vi.fn(() => {
+        result = rowsOf();
+        return query;
       }),
       first: vi.fn(async () => {
-        const items = store[table as keyof typeof store];
-        return items && items.length > 0 ? items[0] : null;
+        const items = rowsOf();
+        return items.length > 0 ? items[0] : null;
       }),
-      insert: vi.fn(async (data: any) => {
+      insert: vi.fn((data: any) => {
         const items = Array.isArray(data) ? data : [data];
-        store[table as keyof typeof store].push(...items);
-        return items;
+        rowsOf().push(...items);
+        result = items;
+        return query;
       }),
-      update: vi.fn(async (data: any) => {
-        const items = store[table as keyof typeof store];
+      update: vi.fn((data: any) => {
+        const items = rowsOf();
         if (items.length > 0) {
           Object.assign(items[0], data);
-          return [items[0]];
+          result = [items[0]];
+        } else {
+          result = [];
         }
-        return [];
+        return query;
       }),
-      limit: vi.fn(function (this: any) {
-        return this;
+      onConflict: vi.fn(() => query),
+      merge: vi.fn(() => {
+        result = undefined;
+        return query;
       }),
-      onConflict: vi.fn().mockReturnThis(),
-      merge: vi.fn().mockResolvedValue(undefined),
-      returning: vi.fn(async function (this: any) {
-        const items = store[table as keyof typeof store];
-        return items.length > 0 ? [items[items.length - 1]] : [];
-      }),
+      returning: vi.fn(() => query),
+      then: (resolve: any, reject: any) =>
+        Promise.resolve(result === UNSET ? rowsOf() : result).then(resolve, reject),
     };
-
-    query.select.mockImplementation(async () => store[table as keyof typeof store] || []);
 
     return query;
   };
 
-  const db: any = (table: string) => createQuery(table);
+  // Cache one builder per table so per-test overrides such as
+  // `db("table").select.mockResolvedValueOnce(...)` apply to the same builder
+  // the service under test receives.
+  const queryCache: Record<string, any> = {};
+  const db: any = (table: string) => (queryCache[table] ??= createQuery(table));
   db.raw = vi.fn();
   db.fn = { now: () => new Date() };
   db.client = {
     wrapIdentifier: (id: string) => `"${id}"`,
   };
   db.transaction = vi.fn(async (callback: any) => {
-    const trx: any = (table: string) => createQuery(table);
+    // Reuse the same cached builders as `db` so assertions on
+    // `db("table").update.mock.calls` see updates issued through the trx.
+    const trx: any = (table: string) => db(table);
     trx.raw = db.raw;
     trx.fn = db.fn;
     return callback(trx);
@@ -131,7 +144,7 @@ describe("ExternalDependencyMonitorService", () => {
         },
       ];
 
-      db("external_dependencies").select.mockResolvedValueOnce(mockDependencies);
+      db("external_dependencies").orderBy.mockResolvedValueOnce(mockDependencies);
 
       const result = await service.listDependencies();
 
@@ -173,7 +186,7 @@ describe("ExternalDependencyMonitorService", () => {
         },
       ];
 
-      db("external_dependencies").select.mockResolvedValueOnce(mockDependencies);
+      db("external_dependencies").orderBy.mockResolvedValueOnce(mockDependencies);
       db("external_dependency_checks").orderBy.mockResolvedValueOnce(mockHistory);
 
       const result = await service.listDependencies({ includeHistory: true, historyLimit: 10 });
@@ -204,7 +217,7 @@ describe("ExternalDependencyMonitorService", () => {
         },
       ];
 
-      db("external_dependencies").select.mockResolvedValueOnce(mockDependencies);
+      db("external_dependencies").orderBy.mockResolvedValueOnce(mockDependencies);
 
       const result = await service.listDependencies();
 
@@ -344,7 +357,7 @@ describe("ExternalDependencyMonitorService", () => {
         status: "maintenance",
       };
 
-      db("external_dependencies").update.mockResolvedValueOnce([mockDependency]);
+      db("external_dependencies").returning.mockResolvedValueOnce([mockDependency]);
 
       const result = await service.setMaintenanceMode(
         "stellar-horizon",
@@ -364,7 +377,7 @@ describe("ExternalDependencyMonitorService", () => {
         status: "unknown",
       };
 
-      db("external_dependencies").update.mockResolvedValueOnce([mockDependency]);
+      db("external_dependencies").returning.mockResolvedValueOnce([mockDependency]);
 
       const result = await service.setMaintenanceMode("stellar-horizon", false);
 
@@ -378,7 +391,7 @@ describe("ExternalDependencyMonitorService", () => {
     });
 
     it("returns null when dependency not found", async () => {
-      db("external_dependencies").update.mockResolvedValueOnce([]);
+      db("external_dependencies").returning.mockResolvedValueOnce([]);
 
       const result = await service.setMaintenanceMode("nonexistent", true);
 

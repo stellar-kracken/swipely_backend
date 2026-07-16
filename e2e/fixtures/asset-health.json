@@ -1,0 +1,28 @@
+{
+  "USDC": {
+    "symbol": "USDC",
+    "overallScore": 0.96,
+    "factors": {
+      "liquidityDepth": 0.98,
+      "priceStability": 0.99,
+      "bridgeUptime": 0.97,
+      "reserveBacking": 1,
+      "volumeTrend": 0.86
+    },
+    "trend": "stable",
+    "lastUpdated": "2026-07-16T00:00:00.000Z"
+  },
+  "USDT": {
+    "symbol": "USDT",
+    "overallScore": 0.82,
+    "factors": {
+      "liquidityDepth": 0.88,
+      "priceStability": 0.95,
+      "bridgeUptime": 0.79,
+      "reserveBacking": 0.9,
+      "volumeTrend": 0.6
+    },
+    "trend": "improving",
+    "lastUpdated": "2026-07-16T00:00:00.000Z"
+  }
+}
