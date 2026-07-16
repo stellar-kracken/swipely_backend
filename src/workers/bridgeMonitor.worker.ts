@@ -51,7 +51,7 @@ function buildMismatchAlert(assetCode: string, supplyCheck: { mismatchPercentage
     sourceType: "supply_mismatch",
     severity: "high",
     triggeredValue: supplyCheck.mismatchPercentage ?? 0,
-    threshold: config.BRIDGE_MISMATCH_THRESHOLD ?? 0.01,
+    threshold: config.BRIDGE_SUPPLY_MISMATCH_THRESHOLD,
     metric: "supply_mismatch_pct",
   };
 }
@@ -78,10 +78,20 @@ export async function processMonitorJob(job: { id?: string; data: { assetCode: s
       alertType: "supply_mismatch",
       priority: "high",
       triggeredValue: supplyCheck.mismatchPercentage ?? 0,
-      threshold: config.BRIDGE_MISMATCH_THRESHOLD ?? 0.01,
+      threshold: config.BRIDGE_SUPPLY_MISMATCH_THRESHOLD,
       metric: "supply_mismatch_pct",
       webhookDelivered: false,
       onChainEventId: null,
+      time: new Date(),
+      updatedAt: null,
+      lifecycleState: "open",
+      acknowledgedAt: null,
+      acknowledgedBy: null,
+      assignedAt: null,
+      assignedTo: null,
+      closedAt: null,
+      closedBy: null,
+      closureNote: null,
     };
 
     const dedupResult = duplicateAlertCheckService.check(dedupEvent);

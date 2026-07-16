@@ -26,10 +26,10 @@ function buildDeterioratingAlert(score: HealthScore): RouteableAlert {
     ownerAddress: "system",
     ruleName: "Health Score Deteriorating",
     assetCode: score.symbol,
-    sourceType: "health_deterioration",
+    sourceType: "health_score_drop",
     severity: score.overallScore < 0.3 ? "critical" : "high",
     triggeredValue: score.overallScore,
-    threshold: config.HEALTH_SCORE_THRESHOLD ?? 0.5,
+    threshold: config.HEALTH_SCORE_THRESHOLD,
     metric: "overall_health_score",
   };
 }
@@ -40,13 +40,23 @@ async function routeDeterioratingAlerts(scores: HealthScore[]): Promise<void> {
     const dedupEvent: Omit<AlertEvent, "eventId"> = {
       ruleId: `health-check-${score.symbol}`,
       assetCode: score.symbol,
-      alertType: "health_deterioration",
+      alertType: "health_score_drop",
       priority: score.overallScore < 0.3 ? "critical" : "high",
       triggeredValue: score.overallScore,
-      threshold: config.HEALTH_SCORE_THRESHOLD ?? 0.5,
+      threshold: config.HEALTH_SCORE_THRESHOLD,
       metric: "overall_health_score",
       webhookDelivered: false,
       onChainEventId: null,
+      time: new Date(),
+      updatedAt: null,
+      lifecycleState: "open",
+      acknowledgedAt: null,
+      acknowledgedBy: null,
+      assignedAt: null,
+      assignedTo: null,
+      closedAt: null,
+      closedBy: null,
+      closureNote: null,
     };
 
     const dedupResult = duplicateAlertCheckService.check(dedupEvent);

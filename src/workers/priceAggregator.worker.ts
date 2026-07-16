@@ -27,9 +27,9 @@ function buildDeviationAlert(symbol: string, deviation: { deviated: boolean; per
     ruleName: "Price Deviation",
     assetCode: symbol,
     sourceType: "price_deviation",
-    severity: deviation.percentage > (config.PRICE_DEVIATION_THRESHOLD ?? 0.02) * 2 ? "critical" : "high",
+    severity: deviation.percentage > config.PRICE_DEVIATION_THRESHOLD * 2 ? "critical" : "high",
     triggeredValue: deviation.percentage,
-    threshold: config.PRICE_DEVIATION_THRESHOLD ?? 0.02,
+    threshold: config.PRICE_DEVIATION_THRESHOLD,
     metric: "price_deviation_pct",
   };
 }
@@ -39,12 +39,22 @@ async function routeDeviationAlert(symbol: string, deviation: { deviated: boolea
     ruleId: `price-aggregator-${symbol}`,
     assetCode: symbol,
     alertType: "price_deviation",
-    priority: deviation.percentage > (config.PRICE_DEVIATION_THRESHOLD ?? 0.02) * 2 ? "critical" : "high",
+    priority: deviation.percentage > config.PRICE_DEVIATION_THRESHOLD * 2 ? "critical" : "high",
     triggeredValue: deviation.percentage,
-    threshold: config.PRICE_DEVIATION_THRESHOLD ?? 0.02,
+    threshold: config.PRICE_DEVIATION_THRESHOLD,
     metric: "price_deviation_pct",
     webhookDelivered: false,
     onChainEventId: null,
+    time: new Date(),
+    updatedAt: null,
+    lifecycleState: "open",
+    acknowledgedAt: null,
+    acknowledgedBy: null,
+    assignedAt: null,
+    assignedTo: null,
+    closedAt: null,
+    closedBy: null,
+    closureNote: null,
   };
 
   const dedupResult = duplicateAlertCheckService.check(dedupEvent);

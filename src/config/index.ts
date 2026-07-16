@@ -3,6 +3,30 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// ---------------------------------------------------------------------------
+// Secret fields — values are NEVER logged during validation failures.
+// Only field *names* appear in error output.
+// ---------------------------------------------------------------------------
+const SECRET_FIELDS = new Set([
+  "POSTGRES_PASSWORD",
+  "REDIS_PASSWORD",
+  "JWT_SECRET",
+  "CONFIG_ENCRYPTION_KEY",
+  "API_KEY_BOOTSTRAP_TOKEN",
+  "CIRCLE_API_KEY",
+  "COINBASE_API_KEY",
+  "COINBASE_API_SECRET",
+  "ONEINCH_API_KEY",
+  "COINMARKETCAP_API_KEY",
+  "COINGECKO_API_KEY",
+  "SMTP_PASSWORD",
+  "DISCORD_BOT_TOKEN",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_WEBHOOK_SECRET",
+  "WS_AUTH_SECRET",
+  "REPORT_SIGNING_KEY_PATH",
+]);
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test", "sandbox"])
@@ -24,6 +48,12 @@ const envSchema = z.object({
   REDIS_HOST: z.string().default("localhost"),
   REDIS_PORT: z.coerce.number().default(6379),
   REDIS_PASSWORD: z.string().default(""),
+  // Set to "true" in production to enable Redis Cluster mode
+  REDIS_CLUSTER: z.string().optional(),
+
+  // Security — required keys for JWT signing and config encryption
+  JWT_SECRET: z.string().min(32).optional(),
+  CONFIG_ENCRYPTION_KEY: z.string().min(32).optional(),
 
   // Stellar
   STELLAR_NETWORK: z.enum(["testnet", "mainnet"]).default("testnet"),
@@ -58,10 +88,7 @@ const envSchema = z.object({
   // External APIs
   CIRCLE_API_KEY: z.string().optional(),
   // Circle API base URL — use sandbox for non-production environments
-  CIRCLE_API_URL: z
-    .string()
-    .url()
-    .default("https://api.circle.com"),
+  CIRCLE_API_URL: z.string().url().default("https://api.circle.com"),
   // Request timeout for Circle API calls (ms)
   CIRCLE_API_TIMEOUT_MS: z.coerce.number().default(5000),
   // Redis TTL for cached Circle price responses (seconds)
@@ -72,6 +99,9 @@ const envSchema = z.object({
   CIRCLE_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   COINBASE_API_KEY: z.string().optional(),
   COINBASE_API_SECRET: z.string().optional(),
+  ONEINCH_API_KEY: z.string().optional(),
+  COINMARKETCAP_API_KEY: z.string().optional(),
+  COINGECKO_API_KEY: z.string().optional(),
   API_KEY_BOOTSTRAP_TOKEN: z.string().optional(),
 
   // Logging
@@ -105,6 +135,8 @@ const envSchema = z.object({
   RATE_LIMIT_STATS_RETENTION_HOURS: z.coerce.number().default(168), // 7 days
   RATE_LIMIT_ENABLE_MONITORING: z.coerce.boolean().default(true),
   RATE_LIMIT_ADMIN_API_KEY_PREFIX: z.string().default("admin_"),
+  // Only set to "true" inside API test suites that exercise rate-limit behaviour
+  ENABLE_RATE_LIMIT_IN_TESTS: z.string().optional(),
 
   // Per-endpoint rate limits (requests per window)
   RATE_LIMIT_ENDPOINT_ASSETS: z.coerce.number().default(200),
@@ -127,12 +159,7 @@ const envSchema = z.object({
   REDIS_CACHE_TTL_SEC: z.coerce.number().default(30),
   REDIS_PRICE_CACHE_PREFIX: z.string().default("price:aggregated"),
 
-  // WebSocket
-  /**
-   * Secret token required to subscribe to private WebSocket channels (e.g.
-   * "alerts").  When absent, private-channel authentication is disabled and
-   * any token is rejected.  Set this to a strong random string in production.
-   */
+  // WebSocket — set to a strong random string in production
   WS_AUTH_SECRET: z.string().optional(),
 
   // Health Score Weights
@@ -193,9 +220,36 @@ const envSchema = z.object({
   VALIDATION_DUPLICATE_CHECK: z.coerce.boolean().default(true),
   VALIDATION_NORMALIZATION: z.coerce.boolean().default(true),
   VALIDATION_CONSISTENCY_CHECKS: z.coerce.boolean().default(true),
-  VALIDATION_ERROR_THRESHOLD: z.coerce.number().default(0.1), // 10% error rate threshold
-  VALIDATION_WARNING_THRESHOLD: z.coerce.number().default(0.3), // 30% warning threshold
-  VALIDATION_DATA_QUALITY_THRESHOLD: z.coerce.number().default(70), // 70% quality score threshold
+  VALIDATION_ERROR_THRESHOLD: z.coerce.number().default(0.1),
+  VALIDATION_WARNING_THRESHOLD: z.coerce.number().default(0.3),
+  VALIDATION_DATA_QUALITY_THRESHOLD: z.coerce.number().default(70),
+
+  // Compliance Report Service
+  REPORT_DIR: z.string().default("./reports"),
+  ARCHIVE_DIR: z.string().default("./archives"),
+  // Path to a PEM key used to sign compliance reports; optional
+  REPORT_SIGNING_KEY_PATH: z.string().optional(),
+
+  // Correlation / anomaly detection
+  CORRELATION_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
+
+  // Background job intervals
+  RECONCILIATION_INTERVAL_MS: z.coerce.number().default(600_000),
+  SOURCE_DECOMMISSION_CHECK_INTERVAL_MS: z.coerce.number().default(3_600_000),
+  PROVIDER_BREAKER_PROBE_INTERVAL_MS: z.coerce.number().default(30_000),
+
+  // Health score alert threshold (0–1); alerts fire when score drops below this
+  HEALTH_SCORE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.5),
+
+  // BullMQ queue rate limiting (per priority level)
+  QUEUE_RATE_MAX_CRITICAL: z.coerce.number().default(1000),
+  QUEUE_RATE_DURATION_MS_CRITICAL: z.coerce.number().default(1000),
+  QUEUE_RATE_MAX_HIGH: z.coerce.number().default(1000),
+  QUEUE_RATE_DURATION_MS_HIGH: z.coerce.number().default(1000),
+  QUEUE_RATE_MAX_NORMAL: z.coerce.number().default(1000),
+  QUEUE_RATE_DURATION_MS_NORMAL: z.coerce.number().default(1000),
+  QUEUE_RATE_MAX_LOW: z.coerce.number().default(1000),
+  QUEUE_RATE_DURATION_MS_LOW: z.coerce.number().default(1000),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
@@ -214,19 +268,36 @@ function validateIssuerAddress(asset: StellarAssetConfig): void {
 }
 
 export const SUPPORTED_ASSETS: StellarAssetConfig[] = [
-  { code: "XLM", issuer: "native" },
-  { code: "USDC", issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN" },
+  { code: "XLM",   issuer: "native" },
+  { code: "USDC",  issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN" },
   { code: "PYUSD", issuer: "GBHZAE5IQTOPQZ66TFWZYIYCHQ6T3GMWHDKFEXAKYWJ2BHLZQ227KRYE" },
-  { code: "EURC", issuer: "GDQOE23CFSUMSVZZ4YRVXGW7PCFNIAHLMRAHDE4Z32DIBQGH4KZZK2KZ" },
+  { code: "EURC",  issuer: "GDQOE23CFSUMSVZZ4YRVXGW7PCFNIAHLMRAHDE4Z32DIBQGH4KZZK2KZ" },
   { code: "FOBXX", issuer: "GBHNGLLIE3KWGKCHIKMHJ5HVZHYIK7WTBE4QF5PLAKL4CJGSEU7HZIW5" },
 ];
 
 SUPPORTED_ASSETS.forEach(validateIssuerAddress);
 
+// ---------------------------------------------------------------------------
+// Parse & validate
+// ---------------------------------------------------------------------------
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error("Invalid environment variables:", parsed.error.format());
+  // Build a sanitised error message — secret values are never printed.
+  const issues = parsed.error.issues.map((issue) => {
+    const field = issue.path.join(".");
+    const label = SECRET_FIELDS.has(field) ? `${field} (value hidden)` : field;
+    return `  • ${label}: ${issue.message}`;
+  });
+
+  // Use process.stderr.write so the message appears even when the logger
+  // hasn't been initialised yet, and avoids piping through pino.
+  process.stderr.write(
+    `\n[config] ❌ Invalid environment — startup aborted.\n` +
+    `         Fix the following variables in your .env file or environment:\n\n` +
+    issues.join("\n") +
+    `\n\n         See .env.example for a full reference.\n\n`
+  );
   process.exit(1);
 }
 

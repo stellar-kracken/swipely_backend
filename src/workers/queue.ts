@@ -31,10 +31,10 @@ export class JobQueue {
           removeOnComplete: true,
           removeOnFail: false,
         },
-        // rate limiting can be configured per priority via environment
+        // rate limiting can be configured per priority via validated env config
         limiter: {
-          max: Number(process.env[`QUEUE_RATE_MAX_${p.toUpperCase()}`] || 1000),
-          duration: Number(process.env[`QUEUE_RATE_DURATION_MS_${p.toUpperCase()}`] || 1000),
+          max: config[`QUEUE_RATE_MAX_${p.toUpperCase()}` as keyof typeof config] as number ?? 1000,
+          duration: config[`QUEUE_RATE_DURATION_MS_${p.toUpperCase()}` as keyof typeof config] as number ?? 1000,
         },
       } as any);
     }

@@ -1,8 +1,8 @@
-import { SUPPORTED_ASSETS } from "../config/index.js";
+import { SUPPORTED_ASSETS, config } from "../config/index.js";
 import { ReconciliationService } from "../services/reconciliation.service.js";
 import { logger } from "../utils/logger.js";
 
-const RECONCILIATION_INTERVAL_MS = Number(process.env.RECONCILIATION_INTERVAL_MS) || 600000; // 10 min default
+const RECONCILIATION_INTERVAL_MS = config.RECONCILIATION_INTERVAL_MS;
 
 export interface BatchReconciliationReport {
   jobId: string;
