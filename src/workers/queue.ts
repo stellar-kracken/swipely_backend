@@ -110,11 +110,17 @@ export class JobQueue {
 
   public async stop() {
     if (this.worker) {
+      await this.worker.pause();
       await this.worker.close();
+      this.worker = null;
     }
     for (const k of Object.keys(this.queues)) {
       await this.queues[k].close();
     }
     logger.info("Job queue system shut down");
+  }
+
+  public async pause(): Promise<void> {
+    await this.worker?.pause();
   }
 }

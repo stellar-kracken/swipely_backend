@@ -21,16 +21,17 @@ import {
 } from "./api/middleware/rateLimit.middleware.js";
 import { initJobSystem } from "./workers/index.js";
 import { JobQueue } from "./workers/queue.js";
-import { initWebhookWorker, stopWebhookWorker } from "./workers/webhookDelivery.worker.js";
-import { initNotificationQueueWorker, stopNotificationQueueWorker } from "./workers/notificationQueue.worker.js";
+import { initWebhookWorker, pauseWebhookWorker, stopWebhookWorker } from "./workers/webhookDelivery.worker.js";
+import { initNotificationQueueWorker, pauseNotificationQueueWorker, stopNotificationQueueWorker } from "./workers/notificationQueue.worker.js";
 import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
 import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
 import { registerTracing } from "./api/middleware/tracing.js";
 import { getTelegramBotService } from "./services/telegram.bot.service.js";
-import { startOutboxSystem, stopOutboxSystem } from "./outbox/index.js";
+import { getOutboxSystem, startOutboxSystem, stopOutboxSystem } from "./outbox/index.js";
 import { getEventFederationService } from "./services/eventFederation/index.js";
+import { GracefulShutdown } from "./bootstrap/gracefulShutdown.js";
 
 export async function buildServer() {
   const server = Fastify({
@@ -247,32 +248,56 @@ async function start() {
   }
 
   // ─── Graceful shutdown ──────────────────────────────────────────────────────
-  const shutdown = async (signal: string) => {
-    logger.info({ signal }, "Shutdown signal received");
-
-    // Stop event federation first (gracefully drains in-flight events)
-    await getEventFederationService().stop();
-    logger.info("Event federation service stopped");
-
-    // Stop outbox system first
-    await stopOutboxSystem();
-    await stopNotificationQueueWorker();
-    logger.info("Outbox system stopped");
-
-    await wsServer.shutdown();
-    await server.close();
-    await JobQueue.getInstance().stop();
-    await getSupplyVerificationQueue().stop();
-    await stopWebhookWorker();
-    stopBatchReconciliationJob();
-    stopSourceDecommissionJob();
-    stopProviderCircuitBreakerJob();
-    logger.info("Server closed");
-    process.exit(0);
-  };
-
-  process.once("SIGTERM", () => { shutdown("SIGTERM").catch(() => process.exit(1)); });
-  process.once("SIGINT",  () => { shutdown("SIGINT").catch(() => process.exit(1)); });
+  new GracefulShutdown(
+    [
+      {
+        name: "primary-job-queue",
+        beginDrain: () => JobQueue.getInstance().pause(),
+        drain: () => JobQueue.getInstance().stop(),
+      },
+      {
+        name: "supply-verification-queue",
+        beginDrain: () => getSupplyVerificationQueue().pause(),
+        drain: () => getSupplyVerificationQueue().stop(),
+      },
+      {
+        name: "webhook-delivery-worker",
+        beginDrain: pauseWebhookWorker,
+        drain: stopWebhookWorker,
+      },
+      {
+        name: "notification-delivery-worker",
+        beginDrain: pauseNotificationQueueWorker,
+        drain: stopNotificationQueueWorker,
+      },
+      {
+        name: "outbox-dispatcher",
+        beginDrain: () => getOutboxSystem().beginDrain(),
+        drain: stopOutboxSystem,
+      },
+      {
+        name: "scheduled-jobs",
+        beginDrain: () => {
+          stopBatchReconciliationJob();
+          stopSourceDecommissionJob();
+          stopProviderCircuitBreakerJob();
+        },
+        drain: async () => undefined,
+      },
+      {
+        name: "event-federation",
+        drain: () => getEventFederationService().stop(),
+      },
+      {
+        name: "http-and-websocket-server",
+        drain: async () => {
+          await wsServer.shutdown();
+          await server.close();
+        },
+      },
+    ],
+    config.SHUTDOWN_GRACE_MS,
+  ).install();
 }
 
 if (process.env.NODE_ENV !== "test") {
