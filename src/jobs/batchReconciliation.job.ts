@@ -34,6 +34,20 @@ export async function runBatchReconciliation(): Promise<BatchReconciliationRepor
     let runId: string | null = null;
 
     try {
+      // NOTE: startRun() inserts a fresh "running" row (all comparison
+      // fields null) and getLatestRun() below then fetches the most
+      // recently started row ordered by started_at desc — which is the row
+      // we just inserted, not a previously completed run. As written, this
+      // means `latest` here is (almost) always the run we just created, so
+      // `latest.status`/`latest.mismatchPercentage` don't reflect a real
+      // comparison. This predates the reconciliation-alerting work (issue
+      // #8) and isn't something we're fixing here — flagging it because it
+      // also means this batch job path currently has no real mismatch data
+      // to alert on. Reconciliation alerting (see reconciliationAlerting.
+      // service.ts) is wired into src/workers/reconciliation.job.ts instead,
+      // where bridgeService.verifySupply() produces real compared values.
+      // Consider filing a follow-up to fetch the latest *completed* run
+      // before calling startRun(), or to compute values here directly.
       const run = await reconciliationService.startRun({ assetCode, jobId });
       runId = run.id;
 
