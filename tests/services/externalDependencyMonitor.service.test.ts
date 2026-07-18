@@ -22,183 +22,70 @@ const makeMockDb = () => {
     external_dependency_checks:  [],
   };
 
-  // Per-table spy cache so tests can do  db("t").spy.mockResolvedValueOnce(...)
-  const spies: Record<string, Record<string, any>> = {};
+  const createQuery = (table: string) => {
+    // The builder is both chainable (methods return the builder) and awaitable
+    // (a `then` makes `await db(table)...` resolve to the pending result), which
+    // mirrors how a real Knex query builder behaves.
+    const UNSET = Symbol("unset");
+    const rowsOf = () => (store[table as keyof typeof store] as any[]) || [];
+    let result: any = UNSET;
 
-  const getSpies = (table: string) => {
-    if (!spies[table]) {
-      spies[table] = {
-        select:    vi.fn(),
-        orderBy:   vi.fn(),
-        limit:     vi.fn(),
-        first:     vi.fn(),
-        update:    vi.fn(),
-        insert:    vi.fn(),
-        returning: vi.fn(),
-      };
-    }
-    return spies[table];
+    const query: any = {
+      where: vi.fn(() => query),
+      whereIn: vi.fn(() => query),
+      orderBy: vi.fn(() => query),
+      limit: vi.fn(() => query),
+      select: vi.fn(() => {
+        result = rowsOf();
+        return query;
+      }),
+      first: vi.fn(async () => {
+        const items = rowsOf();
+        return items.length > 0 ? items[0] : null;
+      }),
+      insert: vi.fn((data: any) => {
+        const items = Array.isArray(data) ? data : [data];
+        rowsOf().push(...items);
+        result = items;
+        return query;
+      }),
+      update: vi.fn((data: any) => {
+        const items = rowsOf();
+        if (items.length > 0) {
+          Object.assign(items[0], data);
+          result = [items[0]];
+        } else {
+          result = [];
+        }
+        return query;
+      }),
+      onConflict: vi.fn(() => query),
+      merge: vi.fn(() => {
+        result = undefined;
+        return query;
+      }),
+      returning: vi.fn(() => query),
+      then: (resolve: any, reject: any) =>
+        Promise.resolve(result === UNSET ? rowsOf() : result).then(resolve, reject),
+    };
+
+    return query;
   };
 
-  // Chainable builder: all methods return a new builder; awaiting resolves data.
-  const makeBuilder = (table: string, resolveWith: () => Promise<any>): any => {
-    const s = getSpies(table);
-    const data = () => store[table] ?? [];
-
-    const resolve = () => resolveWith();
-
-    const builder: any = {
-      then:  (res: any, rej: any) => resolve().then(res, rej),
-      catch: (rej: any) => resolve().catch(rej),
-
-      where:     vi.fn(() => builder),
-      whereIn:   vi.fn(() => builder),
-      onConflict:vi.fn(() => builder),
-      merge:     vi.fn(() => Promise.resolve(undefined)),
-
-      select: (...args: any[]) => {
-        const override = s.select(...args);
-        if (override && typeof override.then === "function") {
-          return makeBuilder(table, () => override);
-        }
-        return makeBuilder(table, resolve);
-      },
-
-      orderBy: (...args: any[]) => {
-        const override = s.orderBy(...args);
-        if (override && typeof override.then === "function") {
-          return makeBuilder(table, () => override);
-        }
-        return makeBuilder(table, resolve);
-      },
-
-      limit: (...args: any[]) => {
-        const override = s.limit(...args);
-        if (override && typeof override.then === "function") {
-          return makeBuilder(table, () => override);
-        }
-        return makeBuilder(table, resolve);
-      },
-
-      first: (...args: any[]) => {
-        const override = s.first(...args);
-        if (override && typeof override.then === "function") return override;
-        return Promise.resolve(data()[0] ?? null);
-      },
-
-      update: (...args: any[]) => {
-        const override = s.update(...args);
-        if (override && typeof override.then === "function") {
-          return makeBuilder(table, () => override);
-        }
-        return makeBuilder(table, () => Promise.resolve(1));
-      },
-
-      insert: (...args: any[]) => {
-        const override = s.insert(...args);
-        if (override && typeof override.then === "function") {
-          return makeBuilder(table, () => override);
-        }
-        // default: push to store and return chainable
-        const items = Array.isArray(args[0]) ? args[0] : [args[0]];
-        items.forEach((item: any) => (store[table] ??= []).push(item));
-        return makeBuilder(table, () => Promise.resolve(items));
-      },
-
-      returning: (...args: any[]) => {
-        const override = s.returning(...args);
-        if (override && typeof override.then === "function") return override;
-        const items = store[table] ?? [];
-        return Promise.resolve(items.length ? [items[items.length - 1]] : []);
-      },
-    };
-
-    return builder;
+  // Cache one builder per table so per-test overrides such as
+  // `db("table").select.mockResolvedValueOnce(...)` apply to the same builder
+  // the service under test receives.
+  const queryCache: Record<string, any> = {};
+  const db: any = (table: string) => (queryCache[table] ??= createQuery(table));
+  db.raw = vi.fn();
+  db.fn = { now: () => new Date() };
+  db.client = {
+    wrapIdentifier: (id: string) => `"${id}"`,
   };
-
-  const db: any = (table: string) => {
-    const s = getSpies(table);
-    const data = () => store[table] ?? [];
-
-    // Root query builder
-    const root: any = {};
-    root.where      = vi.fn(() => root);
-    root.whereIn    = vi.fn(() => root);
-    root.onConflict = vi.fn(() => root);
-    root.merge      = vi.fn(() => Promise.resolve(undefined));
-
-    root.select = (...args: any[]) => {
-      const override = s.select(...args);
-      if (override && typeof override.then === "function") {
-        return makeBuilder(table, () => override);
-      }
-      return makeBuilder(table, () => Promise.resolve(data()));
-    };
-
-    root.orderBy = (...args: any[]) => {
-      const override = s.orderBy(...args);
-      if (override && typeof override.then === "function") {
-        return makeBuilder(table, () => override);
-      }
-      return makeBuilder(table, () => Promise.resolve(data()));
-    };
-
-    root.limit = (...args: any[]) => {
-      const override = s.limit(...args);
-      if (override && typeof override.then === "function") {
-        return makeBuilder(table, () => override);
-      }
-      return makeBuilder(table, () => Promise.resolve(data()));
-    };
-
-    root.first = (...args: any[]) => {
-      const override = s.first(...args);
-      if (override && typeof override.then === "function") return override;
-      return Promise.resolve(data()[0] ?? null);
-    };
-
-    root.update = (...args: any[]) => {
-      const override = s.update(...args);
-      if (override && typeof override.then === "function") {
-        return makeBuilder(table, () => override);
-      }
-      return makeBuilder(table, () => Promise.resolve(1));
-    };
-
-    root.insert = (...args: any[]) => {
-      const override = s.insert(...args);
-      if (override && typeof override.then === "function") {
-        return makeBuilder(table, () => override);
-      }
-      const items = Array.isArray(args[0]) ? args[0] : [args[0]];
-      items.forEach((item: any) => (store[table] ??= []).push(item));
-      return makeBuilder(table, () => Promise.resolve(items));
-    };
-
-    root.returning = (...args: any[]) => {
-      const override = s.returning(...args);
-      if (override && typeof override.then === "function") return override;
-      const items = store[table] ?? [];
-      return Promise.resolve(items.length ? [items[items.length - 1]] : []);
-    };
-
-    // Expose spies directly so tests can do db("t").select.mockResolvedValueOnce(...)
-    root.select.mock   = s.select.mock;   root.select.mockResolvedValueOnce   = (v: any) => s.select.mockResolvedValueOnce(v);
-    root.orderBy.mock  = s.orderBy.mock;  root.orderBy.mockResolvedValueOnce  = (v: any) => s.orderBy.mockResolvedValueOnce(v);  root.orderBy.mockRejectedValueOnce = (v: any) => s.orderBy.mockRejectedValueOnce(v);
-    root.limit.mock    = s.limit.mock;    root.limit.mockResolvedValueOnce    = (v: any) => s.limit.mockResolvedValueOnce(v);
-    root.first.mock    = s.first.mock;    root.first.mockResolvedValueOnce    = (v: any) => s.first.mockResolvedValueOnce(v);    root.first.mockRejectedValueOnce = (v: any) => s.first.mockRejectedValueOnce(v);
-    root.update.mock   = s.update.mock;   root.update.mockResolvedValueOnce   = (v: any) => s.update.mockResolvedValueOnce(v);   root.update.mockRejectedValueOnce = (v: any) => s.update.mockRejectedValueOnce(v);
-    root.insert.mock   = s.insert.mock;   root.insert.mockResolvedValueOnce   = (v: any) => s.insert.mockResolvedValueOnce(v);   root.insert.mockRejectedValueOnce = (v: any) => s.insert.mockRejectedValueOnce(v);
-    root.returning.mock= s.returning.mock;root.returning.mockResolvedValueOnce= (v: any) => s.returning.mockResolvedValueOnce(v);
-
-    return root;
-  };
-
-  db.raw = vi.fn((expr: string) => expr);
-  db.fn  = { now: () => new Date() };
-  db.client = { wrapIdentifier: (id: string) => `"${id}"` };
-  db.transaction = vi.fn(async (cb: any) => {
-    const trx: any = (t: string) => db(t);
+  db.transaction = vi.fn(async (callback: any) => {
+    // Reuse the same cached builders as `db` so assertions on
+    // `db("table").update.mock.calls` see updates issued through the trx.
+    const trx: any = (table: string) => db(table);
     trx.raw = db.raw;
     trx.fn  = db.fn;
     return cb(trx);
@@ -245,7 +132,7 @@ describe("ExternalDependencyMonitorService", () => {
     it("lists all dependencies", async () => {
       const mockDeps = [{ provider_key: "stellar-horizon", display_name: "Stellar Horizon", category: "core-rpc", endpoint: "https://horizon.stellar.org", check_type: "http", latency_warning_ms: 750, latency_critical_ms: 2000, failure_threshold: 2, maintenance_mode: false, maintenance_note: null, status: "healthy", last_checked_at: new Date().toISOString(), last_latency_ms: 150, consecutive_failures: 0, last_success_at: new Date().toISOString(), last_failure_at: null, last_error: null }];
 
-      db("external_dependencies").orderBy.mockResolvedValueOnce(mockDeps);
+      db("external_dependencies").orderBy.mockResolvedValueOnce(mockDependencies);
 
       const result = await service.listDependencies();
 
@@ -258,7 +145,22 @@ describe("ExternalDependencyMonitorService", () => {
       const mockDeps = [{ provider_key: "stellar-horizon", display_name: "Stellar Horizon", category: "core-rpc", endpoint: "https://horizon.stellar.org", check_type: "http", latency_warning_ms: 750, latency_critical_ms: 2000, failure_threshold: 2, maintenance_mode: false, status: "healthy", last_checked_at: new Date().toISOString(), consecutive_failures: 0 }];
       const mockHistory = [{ id: "c1", provider_key: "stellar-horizon", status: "healthy", checked_at: new Date().toISOString(), latency_ms: 150, status_code: 200, within_threshold: true, alert_triggered: false, error: null, details: "{}" }];
 
-      db("external_dependencies").orderBy.mockResolvedValueOnce(mockDeps);
+      const mockHistory = [
+        {
+          id: "check-1",
+          provider_key: "stellar-horizon",
+          status: "healthy",
+          checked_at: new Date().toISOString(),
+          latency_ms: 150,
+          status_code: 200,
+          within_threshold: true,
+          alert_triggered: false,
+          error: null,
+          details: JSON.stringify({}),
+        },
+      ];
+
+      db("external_dependencies").orderBy.mockResolvedValueOnce(mockDependencies);
       db("external_dependency_checks").orderBy.mockResolvedValueOnce(mockHistory);
 
       const result = await service.listDependencies({ includeHistory: true, historyLimit: 10 });
@@ -267,11 +169,28 @@ describe("ExternalDependencyMonitorService", () => {
     });
 
     it("calculates summary correctly", async () => {
-      db("external_dependencies").orderBy.mockResolvedValueOnce([
-        { provider_key: "d1", status: "healthy",  maintenance_mode: false, consecutive_failures: 0 },
-        { provider_key: "d2", status: "degraded", maintenance_mode: false, consecutive_failures: 1 },
-        { provider_key: "d3", status: "down",     maintenance_mode: false, consecutive_failures: 3 },
-      ]);
+      const mockDependencies = [
+        {
+          provider_key: "dep1",
+          status: "healthy",
+          maintenance_mode: false,
+          consecutive_failures: 0,
+        },
+        {
+          provider_key: "dep2",
+          status: "degraded",
+          maintenance_mode: false,
+          consecutive_failures: 1,
+        },
+        {
+          provider_key: "dep3",
+          status: "down",
+          maintenance_mode: false,
+          consecutive_failures: 3,
+        },
+      ];
+
+      db("external_dependencies").orderBy.mockResolvedValueOnce(mockDependencies);
 
       const result = await service.listDependencies();
 
@@ -350,8 +269,7 @@ describe("ExternalDependencyMonitorService", () => {
   describe("setMaintenanceMode", () => {
     const baseDep = { provider_key: "stellar-horizon", display_name: "Stellar Horizon", category: "core-rpc", endpoint: "https://horizon.stellar.org", check_type: "http", latency_warning_ms: 750, latency_critical_ms: 2000, failure_threshold: 2, consecutive_failures: 0 };
 
-    it("enables maintenance mode", async () => {
-      db("external_dependencies").returning.mockResolvedValueOnce([{ ...baseDep, maintenance_mode: true, maintenance_note: "upgrade", status: "maintenance" }]);
+      db("external_dependencies").returning.mockResolvedValueOnce([mockDependency]);
 
       const result = await service.setMaintenanceMode("stellar-horizon", true, "upgrade");
 
@@ -359,7 +277,14 @@ describe("ExternalDependencyMonitorService", () => {
     });
 
     it("disables maintenance mode", async () => {
-      db("external_dependencies").returning.mockResolvedValueOnce([{ ...baseDep, maintenance_mode: false, maintenance_note: null, status: "unknown" }]);
+      const mockDependency = {
+        provider_key: "stellar-horizon",
+        maintenance_mode: false,
+        maintenance_note: null,
+        status: "unknown",
+      };
+
+      db("external_dependencies").returning.mockResolvedValueOnce([mockDependency]);
 
       const result = await service.setMaintenanceMode("stellar-horizon", false);
 

@@ -4,7 +4,7 @@ import { PriceService, type AggregatedPrice } from "../services/price.service.js
 import { logger } from "../utils/logger.js";
 import { alertRoutingService, type RouteableAlert } from "../services/alertRouting.service.js";
 import { duplicateAlertCheckService } from "../services/duplicateAlertCheck.service.js";
-import type { AlertEvent } from "../services/alert.service.js";
+import type { AlertEventInput } from "../services/alert.service.js";
 import { PriceModel } from "../database/models/price.model.js";
 
 const QUEUE_NAME = "price-aggregator";
@@ -35,7 +35,7 @@ function buildDeviationAlert(symbol: string, deviation: { deviated: boolean; per
 }
 
 async function routeDeviationAlert(symbol: string, deviation: { deviated: boolean; percentage: number }): Promise<void> {
-  const dedupEvent: Omit<AlertEvent, "eventId"> = {
+  const dedupEvent: AlertEventInput = {
     ruleId: `price-aggregator-${symbol}`,
     assetCode: symbol,
     alertType: "price_deviation",

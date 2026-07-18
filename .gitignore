@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test / tool caches
+.vite/
+coverage/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local

@@ -1,68 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createMockDb } from "../helpers/knexMock.js";
 import { EscalationService } from "../../src/services/escalation.service.js";
 import type { EscalationRule } from "../../src/services/escalation.service.js";
 
-// ---------------------------------------------------------------------------
-// DB mock — fresh per test, query builders cached per table within a test.
-// ---------------------------------------------------------------------------
-const mockDb = () => {
-  const store = {
-    incidents:          [] as any[],
-    escalation_rules:   [] as any[],
-    escalation_history: [] as any[],
-  };
-
-  const queryCache: Record<string, any> = {};
-
-  const createQuery = (table: string) => {
-    if (queryCache[table]) return queryCache[table];
-
-    const q: any = {};
-    q.where    = vi.fn().mockReturnThis();
-    q.whereIn  = vi.fn().mockReturnThis();
-    // orderBy needs to support chaining (.orderBy("a").orderBy("b"))
-    // AND terminal resolution via mockResolvedValueOnce.
-    // Solution: return a thenable proxy that also has .orderBy() on it.
-    const makeOrderByChain = (resolver: () => Promise<any>): any => {
-      const obj: any = {};
-      obj.then = (res: any, rej: any) => resolver().then(res, rej);
-      obj.catch = (rej: any) => resolver().catch(rej);
-      obj.orderBy = vi.fn(() => makeOrderByChain(resolver));
-      return obj;
-    };
-    // Shared orderBy spy — tests call db(t).orderBy.mockResolvedValueOnce(rows)
-    const orderBySpy = vi.fn();
-    q.orderBy = (...args: any[]) => {
-      const override = orderBySpy(...args);
-      if (override && typeof override.then === "function") {
-        return makeOrderByChain(() => override);
-      }
-      return makeOrderByChain(() => Promise.resolve(store[table as keyof typeof store] ?? []));
-    };
-    q.orderBy.mock = orderBySpy.mock;
-    q.orderBy.mockResolvedValueOnce = (val: any) => { orderBySpy.mockResolvedValueOnce(val); return q.orderBy; };
-    q.orderBy.mockRejectedValueOnce = (val: any) => { orderBySpy.mockRejectedValueOnce(val); return q.orderBy; };
-    q.first    = vi.fn(async () => {
-      const items = store[table as keyof typeof store];
-      return items.length ? items[0] : null;
-    });
-    q.insert   = vi.fn(async (data: any) => {
-      store[table as keyof typeof store].push(data);
-      return [data];
-    });
-    q.update   = vi.fn(async () => 1);
-    q.select   = vi.fn(async () => store[table as keyof typeof store] ?? []);
-
-    queryCache[table] = q;
-    return q;
-  };
-
-  const db: any = (table: string) => createQuery(table);
-  db.raw = vi.fn();
-  db.fn  = { now: () => new Date() };
-  db.__store = store;
-  return db;
-};
+const mockDb = () =>
+  createMockDb(["incidents", "escalation_rules", "escalation_history"]);
 
 vi.mock("../../src/database/connection.js", () => ({ getDatabase: vi.fn() }));
 vi.mock("../../src/utils/logger.js", () => ({
@@ -319,7 +261,8 @@ describe("EscalationService", () => {
         { id: "rule-1", severity: "critical", from_level: 1, is_active: true, notification_channels: JSON.stringify(["email"]),  route_to: JSON.stringify(["team1"]) },
         { id: "rule-2", severity: "high",     from_level: 1, is_active: true, notification_channels: JSON.stringify(["slack"]),  route_to: JSON.stringify(["team2"]) },
       ];
-      db("escalation_rules").orderBy.mockResolvedValueOnce(mockRules);
+
+      db.__store.escalation_rules.push(...mockRules);
 
       const rules = await service.getAllRules();
 
@@ -374,13 +317,8 @@ describe("EscalationService", () => {
       const incident = { id: "incident-123", severity: "high", current_escalation_level: 1, status: "open", updated_at: pastTime, acknowledged_at: null };
       const rule = { id: "rule-1", timeout_minutes: 30, require_acknowledgement: false, to_level: 2, notification_channels: JSON.stringify([]), route_to: JSON.stringify([]) };
 
-      // monitorIncident reads incident + rule, then escalateIncident reads them again
-      db("incidents").first
-        .mockResolvedValueOnce(incident)   // monitorIncident
-        .mockResolvedValueOnce(incident);  // escalateIncident
-      db("escalation_rules").first
-        .mockResolvedValueOnce(rule)       // monitorIncident → getEscalationRule
-        .mockResolvedValueOnce(rule);      // escalateIncident → getEscalationRule
+      db("incidents").first.mockResolvedValue(incident);
+      db("escalation_rules").first.mockResolvedValue(rule);
 
       await service["monitorIncident"]("incident-123");
 
@@ -403,12 +341,16 @@ describe("EscalationService", () => {
       const incident = { id: "incident-123", severity: "critical", current_escalation_level: 1, status: "open", updated_at: pastTime, acknowledged_at: null };
       const rule = { timeout_minutes: 30, require_acknowledgement: true, to_level: 2, notification_channels: JSON.stringify([]), route_to: JSON.stringify([]) };
 
-      db("incidents").first
-        .mockResolvedValueOnce(incident)   // monitorIncident
-        .mockResolvedValueOnce(incident);  // escalateIncident
-      db("escalation_rules").first
-        .mockResolvedValueOnce(rule)       // monitorIncident → getEscalationRule
-        .mockResolvedValueOnce(rule);      // escalateIncident → getEscalationRule
+      const rule = {
+        timeout_minutes: 30,
+        require_acknowledgement: true,
+        to_level: 2,
+        notification_channels: JSON.stringify([]),
+        route_to: JSON.stringify([]),
+      };
+
+      db("incidents").first.mockResolvedValue(incident);
+      db("escalation_rules").first.mockResolvedValue(rule);
 
       await service["monitorIncident"]("incident-123");
 

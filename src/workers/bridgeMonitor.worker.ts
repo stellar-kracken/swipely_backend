@@ -4,7 +4,7 @@ import { BridgeService } from "../services/bridge.service.js";
 import { logger } from "../utils/logger.js";
 import { alertRoutingService, type RouteableAlert } from "../services/alertRouting.service.js";
 import { duplicateAlertCheckService } from "../services/duplicateAlertCheck.service.js";
-import type { AlertEvent } from "../services/alert.service.js";
+import type { AlertEventInput } from "../services/alert.service.js";
 import { getDatabase } from "../database/connection.js";
 
 const QUEUE_NAME = "bridge-monitor";
@@ -72,7 +72,7 @@ export async function processMonitorJob(job: { id?: string; data: { assetCode: s
   if (!supplyCheck.match) {
     logger.warn({ ...supplyCheck }, "Bridge supply mismatch detected");
 
-    const dedupEvent: Omit<AlertEvent, "eventId"> = {
+    const dedupEvent: AlertEventInput = {
       ruleId: `bridge-monitor-${assetCode}`,
       assetCode,
       alertType: "supply_mismatch",
