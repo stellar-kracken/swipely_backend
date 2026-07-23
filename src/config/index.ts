@@ -138,6 +138,16 @@ const envSchema = z.object({
   // reconciliation mismatches into a single open incident.
   RECONCILIATION_ALERT_DEDUP_WINDOW_MS: z.coerce.number().default(10 * 60 * 1000),
 
+  // Schema Drift Alerting
+  // Synthetic owner id used when routing schema drift alerts through
+  // alertRoutingService.routeAlert(). Delivery is controlled by the global,
+  // owner_address = null routing rule seeded in migration 043.
+  SCHEMA_DRIFT_ALERT_OWNER: z.string().default("system:schema-drift"),
+  // Dedup window used by AlertDeduplicationService when collapsing repeated
+  // schema drift alerts for the same provider/field into a single open
+  // incident, escalating severity on repeat rather than re-alerting.
+  SCHEMA_DRIFT_ALERT_DEDUP_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
+
   // Verification & Retries
   RETRY_MAX: z.coerce.number().default(3),
   BRIDGE_VERIFICATION_INTERVAL_MS: z.coerce.number().default(300000),
