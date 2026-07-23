@@ -47,16 +47,6 @@ async function routeDeterioratingAlerts(scores: HealthScore[]): Promise<void> {
       metric: "overall_health_score",
       webhookDelivered: false,
       onChainEventId: null,
-      time: new Date(),
-      updatedAt: null,
-      lifecycleState: "open",
-      acknowledgedAt: null,
-      acknowledgedBy: null,
-      assignedAt: null,
-      assignedTo: null,
-      closedAt: null,
-      closedBy: null,
-      closureNote: null,
     };
 
     const dedupResult = duplicateAlertCheckService.check(dedupEvent);

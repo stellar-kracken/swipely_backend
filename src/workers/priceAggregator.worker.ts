@@ -45,16 +45,6 @@ async function routeDeviationAlert(symbol: string, deviation: { deviated: boolea
     metric: "price_deviation_pct",
     webhookDelivered: false,
     onChainEventId: null,
-    time: new Date(),
-    updatedAt: null,
-    lifecycleState: "open",
-    acknowledgedAt: null,
-    acknowledgedBy: null,
-    assignedAt: null,
-    assignedTo: null,
-    closedAt: null,
-    closedBy: null,
-    closureNote: null,
   };
 
   const dedupResult = duplicateAlertCheckService.check(dedupEvent);

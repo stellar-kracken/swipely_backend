@@ -82,16 +82,6 @@ export async function processMonitorJob(job: { id?: string; data: { assetCode: s
       metric: "supply_mismatch_pct",
       webhookDelivered: false,
       onChainEventId: null,
-      time: new Date(),
-      updatedAt: null,
-      lifecycleState: "open",
-      acknowledgedAt: null,
-      acknowledgedBy: null,
-      assignedAt: null,
-      assignedTo: null,
-      closedAt: null,
-      closedBy: null,
-      closureNote: null,
     };
 
     const dedupResult = duplicateAlertCheckService.check(dedupEvent);

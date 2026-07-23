@@ -268,9 +268,6 @@ const envSchema = z.object({
   SOURCE_DECOMMISSION_CHECK_INTERVAL_MS: z.coerce.number().default(3_600_000),
   PROVIDER_BREAKER_PROBE_INTERVAL_MS: z.coerce.number().default(30_000),
 
-  // Health score alert threshold (0–1); alerts fire when score drops below this
-  HEALTH_SCORE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.5),
-
   // BullMQ queue rate limiting (per priority level)
   QUEUE_RATE_MAX_CRITICAL: z.coerce.number().default(1000),
   QUEUE_RATE_DURATION_MS_CRITICAL: z.coerce.number().default(1000),
