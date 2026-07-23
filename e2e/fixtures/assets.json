@@ -7,15 +7,14 @@
       "issuerAddress": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
     },
     {
-      "symbol": "USDT",
-      "name": "Tether USD",
+      "symbol": "EURC",
+      "name": "Euro Coin",
       "sourceChain": "ethereum",
-      "issuerAddress": "GCQTGZQQ5G4PTM2GL7CDIFKUBIPEC52BROAQIAPW53XBRJVN6ZJVTG6V"
+      "issuerAddress": "GDQOE23CFSUMSVZZ4YRVXGW7PCFNIAHLMRAHDE4Z32DIBQGH4KZZK2KZ"
     },
     {
-      "symbol": "wETH",
-      "name": "Wrapped Ether",
-      "sourceChain": "ethereum"
+      "symbol": "XLM",
+      "name": "Stellar Lumens"
     }
   ],
   "total": 3

@@ -1,28 +1,41 @@
 {
   "USDC": {
     "symbol": "USDC",
-    "overallScore": 0.96,
+    "overallScore": 92,
     "factors": {
-      "liquidityDepth": 0.98,
-      "priceStability": 0.99,
-      "bridgeUptime": 0.97,
-      "reserveBacking": 1,
-      "volumeTrend": 0.86
+      "liquidityDepth": 94,
+      "priceStability": 89,
+      "bridgeUptime": 96,
+      "reserveBacking": 93,
+      "volumeTrend": 90
     },
     "trend": "stable",
     "lastUpdated": "2026-07-16T00:00:00.000Z"
   },
-  "USDT": {
-    "symbol": "USDT",
-    "overallScore": 0.82,
+  "EURC": {
+    "symbol": "EURC",
+    "overallScore": 87,
     "factors": {
-      "liquidityDepth": 0.88,
-      "priceStability": 0.95,
-      "bridgeUptime": 0.79,
-      "reserveBacking": 0.9,
-      "volumeTrend": 0.6
+      "liquidityDepth": 85,
+      "priceStability": 91,
+      "bridgeUptime": 88,
+      "reserveBacking": 90,
+      "volumeTrend": 82
     },
     "trend": "improving",
+    "lastUpdated": "2026-07-16T00:00:00.000Z"
+  },
+  "XLM": {
+    "symbol": "XLM",
+    "overallScore": 78,
+    "factors": {
+      "liquidityDepth": 80,
+      "priceStability": 75,
+      "bridgeUptime": 82,
+      "reserveBacking": 70,
+      "volumeTrend": 83
+    },
+    "trend": "stable",
     "lastUpdated": "2026-07-16T00:00:00.000Z"
   }
 }

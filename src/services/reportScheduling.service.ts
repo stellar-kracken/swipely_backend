@@ -428,9 +428,8 @@ export class ReportSchedulingService {
 
   private async buildReconciliationSection(): Promise<string> {
     try {
-      const report = await this.reconciliationService.getDriftSummaries();
-      const rows = report.summaries
-        .slice(0, 10)
+      const result = await this.reconciliationService.getDriftSummaries({});
+      const rows = (result as any).summaries.slice(0, 10)
         .map(
           (d) =>
             `<tr><td>${d.assetCode}</td><td>${d.bridgeName}</td><td>${d.severity}</td><td>${d.latestRun.mismatchPercentage != null ? (d.latestRun.mismatchPercentage * 100).toFixed(3) + "%" : "—"}</td></tr>`

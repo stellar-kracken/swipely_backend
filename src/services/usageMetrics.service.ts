@@ -15,10 +15,8 @@ export class UsageMetricsService {
   private db = getDatabase();
 
   async record(metric: UsageMetricRow) {
-    // fire-and-forget to avoid blocking request path. The rejection must be
-    // handled on the promise itself — a surrounding try/catch cannot catch an
-    // un-awaited promise rejection.
-    void this.db("usage_metrics")
+    // fire-and-forget: run async but catch errors so they don't go unhandled
+    this.db("usage_metrics")
       .insert({
         endpoint: metric.endpoint,
         method: metric.method,
@@ -27,7 +25,7 @@ export class UsageMetricsService {
         user_id: metric.user_id ?? null,
         metadata: JSON.stringify(metric.metadata ?? {}),
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         logger.warn({ err: e }, "Failed to record usage metric");
       });
   }
