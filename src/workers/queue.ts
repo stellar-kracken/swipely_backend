@@ -207,6 +207,6 @@ export class JobQueue {
   }
 
   public async pause(): Promise<void> {
-    await this.worker?.pause();
+    await Promise.all(this.workers.map((worker) => worker.pause()));
   }
 }
