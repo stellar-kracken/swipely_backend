@@ -9,6 +9,7 @@ const envSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().default(3001),
   WS_PORT: z.coerce.number().default(3002),
+  SHUTDOWN_GRACE_MS: z.coerce.number().int().positive().default(30_000),
 
   // CORS — comma-separated list of allowed origins for production
   CORS_ALLOWED_ORIGINS: z.string().optional(),

@@ -205,4 +205,8 @@ export class JobQueue {
     }
     logger.info("Job queue system shut down");
   }
+
+  public async pause(): Promise<void> {
+    await this.worker?.pause();
+  }
 }

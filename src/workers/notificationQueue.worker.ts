@@ -216,6 +216,7 @@ export async function initNotificationQueueWorker(): Promise<void> {
  */
 export async function stopNotificationQueueWorker(): Promise<void> {
   if (notificationWorker) {
+    await notificationWorker.pause();
     await notificationWorker.close();
     notificationWorker = null;
     logger.info("Notification queue worker stopped");
@@ -224,6 +225,10 @@ export async function stopNotificationQueueWorker(): Promise<void> {
     await notificationQueue.close();
     notificationQueue = null;
   }
+}
+
+export async function pauseNotificationQueueWorker(): Promise<void> {
+  await notificationWorker?.pause();
 }
 
 /**
