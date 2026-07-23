@@ -33,6 +33,13 @@ export interface AlertDeduplicationContext {
   sourceBLabel?: string;
   /** Absolute delta between the two compared values, if known. */
   delta?: number | null;
+  /**
+   * Fully-formed description text supplied by the producer (e.g. a diff
+   * summary), used verbatim instead of the triggeredValue/threshold or
+   * sourceA/sourceB template below. Optional; existing callers that rely on
+   * the generated description are unaffected.
+   */
+  descriptionOverride?: string;
 }
 
 export class AlertDeduplicationService {
@@ -51,10 +58,13 @@ export class AlertDeduplicationService {
   /**
    * Find an open incident that matches the alert within the deduplication window.
    */
-  private async findMatchingIncident(event: AlertEvent): Promise<BridgeIncident | null> {
+  private async findMatchingIncident(
+    event: AlertEvent,
+    windowMs: number = DEDUP_CONFIG.windowMs
+  ): Promise<BridgeIncident | null> {
     const db = getDatabase();
     const now = new Date();
-    const windowStart = new Date(now.getTime() - DEDUP_CONFIG.windowMs);
+    const windowStart = new Date(now.getTime() - windowMs);
 
     // Simple matching on assetCode, alertType and open status.
     const row = await db("bridge_incidents")
@@ -75,12 +85,16 @@ export class AlertDeduplicationService {
    * @param context optional extra detail (source values, delta, record
    * reference) used to build a richer incident description and
    * sourceExternalId. Safe to omit; existing callers are unaffected.
+   * @param windowMs optional override for the deduplication window, in
+   * milliseconds. Defaults to DEDUP_CONFIG.windowMs when omitted, so
+   * existing callers are unaffected.
    */
   public async deduplicate(
     event: AlertEvent,
-    context?: AlertDeduplicationContext
+    context?: AlertDeduplicationContext,
+    windowMs?: number
   ): Promise<BridgeIncident> {
-    const matching = await this.findMatchingIncident(event);
+    const matching = await this.findMatchingIncident(event, windowMs);
     if (matching) {
       // Escalate severity if needed.
       const newSeverity = this.escalateSeverity(matching.severity, event.priority);
@@ -119,6 +133,10 @@ export class AlertDeduplicationService {
   private buildDescription(event: AlertEvent, context?: AlertDeduplicationContext): string {
     if (!context) {
       return `Triggered value ${event.triggeredValue} exceeded threshold ${event.threshold}`;
+    }
+
+    if (context.descriptionOverride) {
+      return context.descriptionOverride;
     }
 
     const parts = [`Triggered value ${event.triggeredValue} exceeded threshold ${event.threshold}`];
