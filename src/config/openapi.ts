@@ -243,3 +243,16 @@ export const commonResponses = {
     },
   },
 };
+
+export const swaggerUiOptions = {
+  routePrefix: "/docs",
+  uiConfig: {
+    docExpansion: "list" as const,
+    deepLinking: true,
+    displayRequestDuration: true,
+    filter: true,
+    showExtensions: true,
+  },
+  staticCSP: true,
+  transformStaticCSP: (header: string) => header,
+};

@@ -1,54 +1,280 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { Logger } from 'nestjs-pino';
-import { ValidationPipe } from '@nestjs/common';
-import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
-import { setupOpenAPI } from './config/openapi.config';
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
+import rateLimit from "@fastify/rate-limit";
+import { config } from "./config/index.js";
+import { logger } from "./utils/logger.js";
+import { registerRoutes } from "./api/routes/index.js";
+import { registerValidation } from "./api/middleware/validation.js";
+import { registerMetrics } from "./api/middleware/metrics.js";
+import { registerUsageMetrics } from "./api/middleware/usageMetrics.js";
+import { startBridgeVerificationJob } from "./jobs/verification.job.js";
+import { startBatchReconciliationJob, stopBatchReconciliationJob } from "./jobs/batchReconciliation.job.js";
+import { startSourceDecommissionJob, stopSourceDecommissionJob } from "./jobs/sourceDecommission.job.js";
+import { startProviderCircuitBreakerJob, stopProviderCircuitBreakerJob } from "./jobs/providerCircuitBreaker.job.js";
+import { wsServer } from "./api/websocket/websocket.server.js";
+import {
+  registerRateLimiting,
+  getRateLimitMetrics,
+} from "./api/middleware/rateLimit.middleware.js";
+import { initJobSystem } from "./workers/index.js";
+import { JobQueue } from "./workers/queue.js";
+import { initWebhookWorker, stopWebhookWorker } from "./workers/webhookDelivery.worker.js";
+import { initNotificationQueueWorker, stopNotificationQueueWorker } from "./workers/notificationQueue.worker.js";
+import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
+import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
+import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
+import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
+import { registerTracing } from "./api/middleware/tracing.js";
+import { getTelegramBotService } from "./services/telegram.bot.service.js";
+import { startOutboxSystem, stopOutboxSystem } from "./outbox/index.js";
+import { getEventFederationService } from "./services/eventFederation/index.js";
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    bufferLogs: true,
+export async function buildServer() {
+  const server = Fastify({
+    logger: false,
+    loggerInstance: logger,
+    ajv: {
+      customOptions: {
+        strict: false,
+      },
+    },
   });
 
-  // Use Pino logger
-  app.useLogger(app.get(Logger));
+  // Register shared schemas referenced via $ref in route definitions
+  server.addSchema({
+    $id: "Error",
+    type: "object",
+    properties: {
+      error: { type: "string" },
+      message: { type: "string" },
+      statusCode: { type: "number" },
+    },
+  });
+  server.addSchema({
+    $id: "HealthScore",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "AlertRule",
+    type: "object",
+    additionalProperties: true,
+  });
+  server.addSchema({
+    $id: "Watchlist",
+    type: "object",
+    additionalProperties: true,
+  });
 
-  // Global validation pipe
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    transform: true,
-    forbidNonWhitelisted: true,
-  }));
+  // Register correlation middleware first (to capture trace context for all requests)
+  await registerCorrelationMiddleware(server as any);
 
-  // Global correlation ID interceptor
-  app.useGlobalInterceptors(new CorrelationIdInterceptor());
+  // Register request/response logging middleware
+  await registerRequestLoggingMiddleware(server as any);
 
-  // CORS
-  app.enableCors({
-    origin: process.env.CORS_ORIGIN || '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID'],
+  // Register tracing middleware to populate trace headers/context
+  await registerTracing(server as any);
+
+  // Register metrics middleware (to capture all requests)
+  await registerMetrics(server as any);
+
+  // Register lightweight usage metrics middleware (stores aggregates for queries)
+  await registerUsageMetrics(server as any);
+
+  // Register plugins
+  const corsOrigin = config.NODE_ENV === "production"
+    ? (config as any).CORS_ALLOWED_ORIGINS
+      ? (config as any).CORS_ALLOWED_ORIGINS.split(",").map((s: string) => s.trim())
+      : false  // block all cross-origin in production if not configured
+    : true;    // allow all origins in development/test
+  await server.register(cors, {
+    origin: corsOrigin,
     credentials: true,
   });
 
-  // Global prefix
-  app.setGlobalPrefix('api');
+  // OpenAPI / Swagger — must be registered before routes so schemas are collected
+  await server.register(swagger, swaggerOptions);
+  await server.register(swaggerUi, swaggerUiOptions);
 
-  // Setup OpenAPI docs (only in development)
-  if (process.env.NODE_ENV !== 'production') {
-    setupOpenAPI(app);
-    console.log('📚 Swagger documentation available at /api/docs');
-  }
+  // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
+  await registerRateLimiting(server as any);
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
-  
-  const logger = app.get(Logger);
-  logger.info(`🚀 Application running on port ${port}`);
-  
-  if (process.env.NODE_ENV !== 'production') {
-    logger.info(`📚 API Docs: http://localhost:${port}/api/docs`);
-    logger.info(`📄 OpenAPI Spec: http://localhost:${port}/api/docs-json`);
-  }
+  // Register official rate-limit plugin to satisfy CodeQL and handle per-route config
+  await server.register(rateLimit, {
+    global: false,
+    addHeaders: {
+      "x-ratelimit-limit": false,
+      "x-ratelimit-remaining": false,
+      "x-ratelimit-reset": false,
+      "retry-after": false,
+    },
+  });
+
+  // Enable permessage-deflate compression for WebSocket frames.
+  await server.register(websocket, {
+    options: {
+      perMessageDeflate: true,
+    },
+  });
+
+  // Register routes
+  await registerRoutes(server as any);
+  // Rate-limit metrics (internal monitoring endpoint)
+  server.get(
+    "/api/v1/metrics/rate-limits",
+    {
+      schema: {
+        tags: ["Cache"],
+        summary: "Rate-limit sliding-window metrics",
+        security: [{ ApiKeyAuth: [] }],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              metrics: { type: "object", additionalProperties: true },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+    },
+    async () => {
+      return { metrics: getRateLimitMetrics(), timestamp: new Date().toISOString() };
+    },
+  );
+
+  // Outbox health check endpoint
+  server.get(
+    "/api/v1/health/outbox",
+    {
+      schema: {
+        tags: ["Health"],
+        summary: "Outbox system health check",
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", enum: ["healthy", "degraded", "unhealthy"] },
+              details: {
+                type: "object",
+                properties: {
+                  initialized: { type: "boolean" },
+                  dispatcherRunning: { type: "boolean" },
+                  pendingEvents: { type: "number" },
+                  failedEvents: { type: "number" },
+                  deadLetterEvents: { type: "number" },
+                },
+              },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { getOutboxSystem } = await import("./outbox/index.js");
+        const outboxSystem = getOutboxSystem();
+        const healthCheck = await outboxSystem.healthCheck();
+        
+        return {
+          ...healthCheck,
+          timestamp: new Date().toISOString(),
+        };
+      } catch (error) {
+        return reply.code(200 as any).send({
+          status: "unhealthy",
+          details: {
+            initialized: false,
+            dispatcherRunning: false,
+            pendingEvents: 0,
+            failedEvents: 0,
+            deadLetterEvents: 0,
+          },
+          error: "Outbox system not available",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    },
+  );
+
+  return server;
 }
-bootstrap();
+
+async function start() {
+  const server = await buildServer();
+
+  try {
+    await server.listen({ port: config.PORT, host: "0.0.0.0" });
+    server.log.info(
+      `Stellar Bridge Watch API running on port ${config.PORT}`
+    );
+
+    // Initialize background jobs
+    await initJobSystem();
+
+    // Initialize webhook delivery worker
+    await initWebhookWorker();
+
+    // Initialize notification queue worker
+    await initNotificationQueueWorker();
+
+    // Start outbox dispatcher (after all other systems are ready)
+    await startOutboxSystem();
+    server.log.info("Outbox dispatcher started");
+
+    // Start real-time event stream federation
+    await getEventFederationService().start();
+    server.log.info("Event federation service started");
+
+    // Start batch reconciliation job
+    startBatchReconciliationJob();
+    server.log.info("Batch reconciliation job started");
+
+    // Start source decommission readiness checks
+    startSourceDecommissionJob();
+    server.log.info("Source decommission readiness job started");
+
+    // Start provider circuit breaker recovery probe sweep
+    startProviderCircuitBreakerJob();
+    server.log.info("Provider circuit breaker job started");
+  } catch (err) {
+    server.log.error(err);
+    process.exit(1);
+  }
+
+  // ─── Graceful shutdown ──────────────────────────────────────────────────────
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, "Shutdown signal received");
+
+    // Stop event federation first (gracefully drains in-flight events)
+    await getEventFederationService().stop();
+    logger.info("Event federation service stopped");
+
+    // Stop outbox system first
+    await stopOutboxSystem();
+    await stopNotificationQueueWorker();
+    logger.info("Outbox system stopped");
+
+    await wsServer.shutdown();
+    await server.close();
+    await JobQueue.getInstance().stop();
+    await getSupplyVerificationQueue().stop();
+    await stopWebhookWorker();
+    stopBatchReconciliationJob();
+    stopSourceDecommissionJob();
+    stopProviderCircuitBreakerJob();
+    logger.info("Server closed");
+    process.exit(0);
+  };
+
+  process.once("SIGTERM", () => { shutdown("SIGTERM").catch(() => process.exit(1)); });
+  process.once("SIGINT",  () => { shutdown("SIGINT").catch(() => process.exit(1)); });
+}
+
+if (process.env.NODE_ENV !== "test") {
+  start();
+}
