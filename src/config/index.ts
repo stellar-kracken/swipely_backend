@@ -33,6 +33,7 @@ const envSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().default(3001),
   WS_PORT: z.coerce.number().default(3002),
+  SHUTDOWN_GRACE_MS: z.coerce.number().int().positive().default(30_000),
 
   // CORS — comma-separated list of allowed origins for production
   CORS_ALLOWED_ORIGINS: z.string().optional(),
@@ -151,6 +152,34 @@ const envSchema = z.object({
   BRIDGE_SUPPLY_MISMATCH_THRESHOLD: z.coerce.number().default(0.1),
   HEALTH_SCORE_THRESHOLD: z.coerce.number().default(0.5),
 
+  // Reconciliation Alerting
+  // Default threshold (percentage points, same scale as mismatchPercentage)
+  // above which a reconciliation discrepancy raises a routed/deduplicated
+  // alert. Can be overridden per-asset via RECONCILIATION_ALERT_THRESHOLDS_JSON.
+  RECONCILIATION_ALERT_THRESHOLD: z.coerce.number().default(0.1),
+  // Optional per-asset/source override, e.g. '{"USDC":0.05,"EURC":0.2}'
+  RECONCILIATION_ALERT_THRESHOLDS_JSON: z.string().optional(),
+  // Synthetic owner id used when routing reconciliation alerts through
+  // alertRoutingService.routeAlert(). This does not correspond to a real
+  // user/wallet — it exists only so routing preference lookups have a key
+  // to check against (they fall back to sane defaults when no preferences
+  // row exists). Actual delivery is controlled by the global, owner_address
+  // = null routing rule seeded in migration 039.
+  RECONCILIATION_ALERT_OWNER: z.string().default("system:reconciliation"),
+  // Dedup window used by AlertDeduplicationService when collapsing repeated
+  // reconciliation mismatches into a single open incident.
+  RECONCILIATION_ALERT_DEDUP_WINDOW_MS: z.coerce.number().default(10 * 60 * 1000),
+
+  // Schema Drift Alerting
+  // Synthetic owner id used when routing schema drift alerts through
+  // alertRoutingService.routeAlert(). Delivery is controlled by the global,
+  // owner_address = null routing rule seeded in migration 043.
+  SCHEMA_DRIFT_ALERT_OWNER: z.string().default("system:schema-drift"),
+  // Dedup window used by AlertDeduplicationService when collapsing repeated
+  // schema drift alerts for the same provider/field into a single open
+  // incident, escalating severity on repeat rather than re-alerting.
+  SCHEMA_DRIFT_ALERT_DEDUP_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
+
   // Verification & Retries
   RETRY_MAX: z.coerce.number().default(3),
   BRIDGE_VERIFICATION_INTERVAL_MS: z.coerce.number().default(300000),
@@ -258,6 +287,13 @@ export type EnvConfig = z.infer<typeof envSchema>;
 export interface StellarAssetConfig {
   code: string;
   issuer: string;
+  /**
+   * Optional per-asset override for the reconciliation alert threshold
+   * (percentage points, same scale as VerificationResult.mismatchPercentage).
+   * Falls back to config.RECONCILIATION_ALERT_THRESHOLD, then to any value
+   * supplied via RECONCILIATION_ALERT_THRESHOLDS_JSON, when not set here.
+   */
+  reconciliationAlertThreshold?: number;
 }
 
 function validateIssuerAddress(asset: StellarAssetConfig): void {
@@ -303,3 +339,34 @@ if (!parsed.success) {
 }
 
 export const config: EnvConfig = parsed.data;
+
+/**
+ * Resolves the reconciliation alert threshold for a given asset code, in this
+ * order of precedence:
+ *   1. SUPPORTED_ASSETS[].reconciliationAlertThreshold (per-asset, in code)
+ *   2. RECONCILIATION_ALERT_THRESHOLDS_JSON (per-asset, via env)
+ *   3. RECONCILIATION_ALERT_THRESHOLD (global default)
+ */
+export function getReconciliationAlertThreshold(assetCode: string): number {
+  const assetConfig = SUPPORTED_ASSETS.find((a) => a.code === assetCode);
+  if (assetConfig?.reconciliationAlertThreshold !== undefined) {
+    return assetConfig.reconciliationAlertThreshold;
+  }
+
+  if (config.RECONCILIATION_ALERT_THRESHOLDS_JSON) {
+    try {
+      const overrides = JSON.parse(config.RECONCILIATION_ALERT_THRESHOLDS_JSON) as Record<
+        string,
+        number
+      >;
+      if (typeof overrides[assetCode] === "number") {
+        return overrides[assetCode];
+      }
+    } catch {
+      // Malformed override JSON — fall through to the global default rather
+      // than throwing, since this must never block a reconciliation run.
+    }
+  }
+
+  return config.RECONCILIATION_ALERT_THRESHOLD;
+}
