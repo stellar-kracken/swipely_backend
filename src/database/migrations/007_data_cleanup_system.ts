@@ -231,25 +231,27 @@ export async function up(knex: Knex): Promise<void> {
     $$ LANGUAGE plpgsql
   `);
 
-  // Create index for better cleanup performance
+  // A rolling NOW()-based partial-index predicate is invalid in PostgreSQL
+  // because index predicates must contain only immutable expressions. A
+  // regular time index still supports the range scans used by cleanup jobs.
   await knex.raw(`
-    CREATE INDEX IF NOT EXISTS idx_prices_time_cleanup ON prices (time DESC) WHERE time < NOW() - INTERVAL '7 days'
+    CREATE INDEX IF NOT EXISTS idx_prices_time_cleanup ON prices (time DESC)
   `);
 
   await knex.raw(`
-    CREATE INDEX IF NOT EXISTS idx_health_scores_time_cleanup ON health_scores (time DESC) WHERE time < NOW() - INTERVAL '30 days'
+    CREATE INDEX IF NOT EXISTS idx_health_scores_time_cleanup ON health_scores (time DESC)
   `);
 
   await knex.raw(`
-    CREATE INDEX IF NOT EXISTS idx_pool_events_time_cleanup ON pool_events (time DESC) WHERE time < NOW() - INTERVAL '14 days'
+    CREATE INDEX IF NOT EXISTS idx_pool_events_time_cleanup ON pool_events (time DESC)
   `);
 
   await knex.raw(`
-    CREATE INDEX IF NOT EXISTS idx_pool_metrics_time_cleanup ON pool_metrics (time DESC) WHERE time < NOW() - INTERVAL '30 days'
+    CREATE INDEX IF NOT EXISTS idx_pool_metrics_time_cleanup ON pool_metrics (time DESC)
   `);
 
   await knex.raw(`
-    CREATE INDEX IF NOT EXISTS idx_search_analytics_time_cleanup ON search_analytics (time DESC) WHERE time < NOW() - INTERVAL '7 days'
+    CREATE INDEX IF NOT EXISTS idx_search_analytics_time_cleanup ON search_analytics (time DESC)
   `);
 }
 
