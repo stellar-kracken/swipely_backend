@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: timescale/timescaledb:2.29.1-pg16
         env:
           POSTGRES_DB: bridge_watch_test
           POSTGRES_USER: bridge_watch
