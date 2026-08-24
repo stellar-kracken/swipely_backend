@@ -37,6 +37,18 @@ npm run dev                 # start the API in watch mode
 | `npm run test` | Run the test suite |
 | `npm run docs:generate` | Generate the OpenAPI spec |
 
+## API documentation
+
+The API's OpenAPI 3 contract is generated from the live Fastify route schemas
+via `npm run docs:generate` and committed at `docs/openapi.json` (hand-authored
+fragments live under `docs/openapi/`). A CI check regenerates the spec on every
+push/PR and fails the build if it differs from the committed file, so the
+contract can't silently drift from the actual routes.
+
+Once the API is running, Swagger UI serves the same spec interactively at
+`http://localhost:<PORT>/docs` (`http://localhost:3001/docs` with the default
+`PORT`) — the raw JSON is available at `/docs/json` and YAML at `/docs/yaml`.
+
 ## Observability
 
 Prometheus scrape config, alert rules, and a Grafana dashboard live alongside the
