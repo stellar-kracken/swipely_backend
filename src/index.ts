@@ -24,7 +24,7 @@ import { JobQueue } from "./workers/queue.js";
 import { initWebhookWorker, stopWebhookWorker } from "./workers/webhookDelivery.worker.js";
 import { initNotificationQueueWorker, stopNotificationQueueWorker } from "./workers/notificationQueue.worker.js";
 import { getSupplyVerificationQueue } from "./jobs/supplyVerification.job.js";
-import { swaggerOptions, swaggerUiOptions } from "./config/openapi.js";
+import { swaggerOptions, swaggerUiOptions, registerDefaultErrorResponse } from "./config/openapi.js";
 import { registerCorrelationMiddleware } from "./api/middleware/correlation.middleware.js";
 import { registerRequestLoggingMiddleware } from "./api/middleware/logging.middleware.js";
 import { registerTracing } from "./api/middleware/tracing.js";
@@ -98,6 +98,11 @@ export async function buildServer() {
   // OpenAPI / Swagger — must be registered before routes so schemas are collected
   await server.register(swagger, swaggerOptions);
   await server.register(swaggerUi, swaggerUiOptions);
+
+  // Documents a default error response for every route that doesn't declare
+  // its own, so the generated spec always shows an error shape. Must also
+  // run before routes are registered.
+  registerDefaultErrorResponse(server as any);
 
   // Sliding-window Redis rate limiting (replaces the simple @fastify/rate-limit global)
   await registerRateLimiting(server as any);

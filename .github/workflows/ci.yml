@@ -31,3 +31,13 @@ jobs:
 
       - name: Unit tests
         run: npm run test:unit
+
+      - name: Check OpenAPI spec is up to date
+        run: |
+          npm run docs:generate
+          if ! git diff --quiet -- docs/openapi.json; then
+            echo "::error::docs/openapi.json is out of date with the current routes."
+            echo "Run 'npm run docs:generate' locally and commit the result."
+            git diff -- docs/openapi.json
+            exit 1
+          fi

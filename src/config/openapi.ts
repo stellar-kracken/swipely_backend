@@ -1,5 +1,5 @@
 import type { FastifyDynamicSwaggerOptions } from "@fastify/swagger";
-import type { FastifySchema } from "fastify";
+import type { FastifyInstance, FastifySchema } from "fastify";
 
 const DEFAULT_ERROR_RESPONSE = {
   type: "object",
@@ -91,6 +91,12 @@ API requests are rate-limited to prevent abuse.
           scheme: "bearer",
           bearerFormat: "JWT",
           description: "Enter JWT token",
+        },
+        ApiKeyAuth: {
+          type: "apiKey",
+          in: "header",
+          name: "x-api-key",
+          description: "API key issued to a client, sent via the x-api-key header",
         },
       },
       schemas: {
@@ -256,3 +262,39 @@ export const swaggerUiOptions = {
   staticCSP: true,
   transformStaticCSP: (header: string) => header,
 };
+
+/**
+ * Registers a generic error-response schema and wires an `onRoute` hook that
+ * adds it as the OpenAPI `default` response (i.e. "whatever status code this
+ * route doesn't otherwise document") for every route that doesn't already
+ * declare one of its own.
+ *
+ * Most routes in this codebase only document their success response, which
+ * left the generated spec without a documented error shape for the large
+ * majority of endpoints. `default` applies to *any* status code a route
+ * doesn't otherwise declare in `schema.response` — including a success code
+ * the route never bothered to declare — so the schema deliberately has no
+ * `type` at all. An untyped JSON schema matches any value and fast-json-stringify
+ * serializes it identically to plain `JSON.stringify` (critically, unlike
+ * `type: "object"`, it does not turn an undeclared array response into an
+ * object keyed by index). That makes this a pure passthrough at
+ * serialization time that never changes what a route actually sends. This
+ * must run before routes are registered so the hook applies to them.
+ */
+export function registerDefaultErrorResponse(server: FastifyInstance): void {
+  server.addSchema({
+    $id: "GenericError",
+    description:
+      "Standard error response. Exact fields vary by endpoint, but the body always describes what went wrong.",
+  });
+
+  server.addHook("onRoute", (routeOptions) => {
+    if (routeOptions.method === "HEAD" || (routeOptions as any).websocket) return;
+
+    const schema = (routeOptions.schema ??= {}) as FastifySchema;
+    const responses = (schema.response ??= {}) as Record<string, unknown>;
+    if (!("default" in responses)) {
+      responses.default = { $ref: "GenericError#" };
+    }
+  });
+}
