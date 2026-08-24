@@ -224,6 +224,52 @@ describe("MetricsService", () => {
     });
   });
 
+  describe("queueJobWaitDuration", () => {
+    it("observes the processing-lag histogram for a queued job", async () => {
+      metrics.queueJobWaitDuration.observe(
+        { queue_name: "bridge-watch-jobs-high", job_type: "verify" },
+        2.5,
+      );
+
+      const json = await metrics.getMetricsJSON();
+      const count = findSample(
+        json,
+        "queue_job_wait_seconds",
+        (l) => l.queue_name === "bridge-watch-jobs-high" && l.job_type === "verify",
+        "queue_job_wait_seconds_count",
+      );
+      expect(count?.value).toBe(1);
+
+      const text = await metrics.getMetrics();
+      expect(text).toContain("queue_job_wait_seconds");
+    });
+  });
+
+  describe("recordCircuitBreakerState", () => {
+    it("encodes closed/half_open/open as 0/1/2 on the state gauge", async () => {
+      metrics.recordCircuitBreakerState("coingecko", "closed");
+      metrics.recordCircuitBreakerState("coinmarketcap", "half_open");
+      metrics.recordCircuitBreakerState("allbridge-rpc", "open");
+
+      const json = await metrics.getMetricsJSON();
+      const closed = findSample(json, "circuit_breaker_state", (l) => l.provider_key === "coingecko");
+      const halfOpen = findSample(json, "circuit_breaker_state", (l) => l.provider_key === "coinmarketcap");
+      const open = findSample(json, "circuit_breaker_state", (l) => l.provider_key === "allbridge-rpc");
+
+      expect(closed?.value).toBe(0);
+      expect(halfOpen?.value).toBe(1);
+      expect(open?.value).toBe(2);
+    });
+
+    it("is exposed on the Prometheus metrics endpoint output", async () => {
+      metrics.recordCircuitBreakerState("coingecko", "open");
+
+      const text = await metrics.getMetrics();
+      expect(text).toContain("circuit_breaker_state");
+      expect(text).toContain('provider_key="coingecko"');
+    });
+  });
+
   describe("reset", () => {
     it("clears recorded metric values", async () => {
       metrics.recordHttpRequest("GET", "/reset-me", 200, 0.01);

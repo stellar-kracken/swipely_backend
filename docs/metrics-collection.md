@@ -156,11 +156,12 @@ Monitor background job processing.
 
 | Metric                       | Type      | Labels                           | Description    |
 | ---------------------------- | --------- | -------------------------------- | -------------- |
-| `queue_jobs_active`          | Gauge     | queue_name, job_type             | Active jobs    |
-| `queue_jobs_waiting`         | Gauge     | queue_name, job_type             | Waiting jobs   |
-| `queue_jobs_completed_total` | Counter   | queue_name, job_type             | Completed jobs |
-| `queue_jobs_failed_total`    | Counter   | queue_name, job_type, error_type | Failed jobs    |
-| `queue_job_duration_seconds` | Histogram | queue_name, job_type             | Job duration   |
+| `queue_jobs_active`          | Gauge     | queue_name, job_type             | Active (in-flight) jobs |
+| `queue_jobs_waiting`         | Gauge     | queue_name, job_type             | Waiting jobs (queue depth), polled every 15s |
+| `queue_jobs_completed_total` | Counter   | queue_name, job_type             | Completed jobs, per worker/job type |
+| `queue_jobs_failed_total`    | Counter   | queue_name, job_type, error_type | Failed jobs, per worker/job type and error class |
+| `queue_job_duration_seconds` | Histogram | queue_name, job_type             | Time spent processing a job once picked up |
+| `queue_job_wait_seconds`     | Histogram | queue_name, job_type             | Processing lag: time a job spent queued before a worker started it |
 
 ### Business Metrics
 
@@ -176,6 +177,7 @@ Track domain-specific KPIs.
 | `liquidity_tvl_usd`                 | Gauge   | symbol, dex, chain                    | Total Value Locked       |
 | `alerts_triggered_total`            | Counter | alert_type, priority, bridge_id       | Alerts triggered         |
 | `circuit_breaker_trips_total`       | Counter | bridge_id, reason                     | Circuit breaker trips    |
+| `circuit_breaker_state`             | Gauge   | provider_key                          | Current state per protected provider dependency (0=closed, 1=half_open, 2=open) |
 
 ### Cache Metrics
 
@@ -362,6 +364,18 @@ rate(bridge_verifications_total[5m]) * 100
 ```promql
 rate(cache_hits_total[5m]) /
 (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) * 100
+```
+
+**Providers with an open or half-open circuit breaker:**
+
+```promql
+circuit_breaker_state > 0
+```
+
+**95th percentile queue processing lag:**
+
+```promql
+histogram_quantile(0.95, rate(queue_job_wait_seconds_bucket[5m]))
 ```
 
 **Database connection pool utilization:**
