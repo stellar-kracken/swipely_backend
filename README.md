@@ -41,7 +41,9 @@ npm run dev                 # start the API in watch mode
 
 Prometheus scrape config, alert rules, and a Grafana dashboard live alongside the
 service (`prometheus.yml`, `prometheus-alerts.yml`, `grafana/`). See
-`METRICS_QUICKSTART.md` for a fast local setup.
+`METRICS_QUICKSTART.md` for a fast local setup, and
+[`docs/metrics-collection.md`](docs/metrics-collection.md) for the full catalog of
+exposed metrics (names, types, labels, and meaning).
 
 ## Environment variables
 

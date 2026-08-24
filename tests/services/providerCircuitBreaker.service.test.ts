@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ProviderCircuitBreakerService } from "../../src/services/providerCircuitBreaker.service.js";
+import { getMetricsService } from "../../src/services/metrics.service.js";
 
 const createQueryBuilder = (rows: any[] = []) => {
   const builder: any = {
@@ -256,6 +257,85 @@ describe("ProviderCircuitBreakerService", () => {
 
       expect(result).toBe("ok");
       expect(fn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("circuit_breaker_state metric", () => {
+    const readGauge = async (providerKey: string) => {
+      const json = await getMetricsService().getMetricsJSON();
+      const metric = json.find((m: any) => m.name === "circuit_breaker_state");
+      return metric?.values.find((v: any) => v.labels?.provider_key === providerKey)?.value;
+    };
+
+    /**
+     * A stateful `provider_circuit_breaker_state` row so multi-step flows
+     * (recordFailure/isAvailable/setManualOverride all end by re-reading the
+     * row via getState) observe their own writes, the way a real DB would.
+     */
+    const mockStatefulRow = (initial: Record<string, unknown>) => {
+      let row: Record<string, unknown> = { ...initial };
+      mockKnex.mockImplementation(() => {
+        const builder = createQueryBuilder([]);
+        builder.first = vi.fn().mockImplementation(async () => ({ ...row }));
+        builder.update = vi.fn().mockImplementation(async (patch: Record<string, unknown>) => {
+          row = { ...row, ...patch };
+          return 1;
+        });
+        builder.returning = vi.fn().mockImplementation(async () => [{ ...row }]);
+        return builder;
+      });
+    };
+
+    it("records the closed state (0) the first time a provider is seen", async () => {
+      mockKnex.mockImplementation(() => {
+        const builder = createQueryBuilder([]);
+        builder.first = vi.fn().mockResolvedValue(undefined);
+        builder.returning = vi
+          .fn()
+          .mockResolvedValue([makeStateRow({ provider_key: "metric-new-provider" })]);
+        return builder;
+      });
+
+      await service.getState("metric-new-provider");
+
+      expect(await readGauge("metric-new-provider")).toBe(0);
+    });
+
+    it("sets the gauge to open (2) when the breaker trips", async () => {
+      mockStatefulRow(
+        makeStateRow({ provider_key: "metric-trip-provider", consecutive_failures: 2, failure_threshold: 3 })
+      );
+
+      await service.recordFailure("metric-trip-provider", "timeout");
+
+      expect(await readGauge("metric-trip-provider")).toBe(2);
+    });
+
+    it("sets the gauge to half_open (1) then closed (0) across a recovery probe", async () => {
+      mockStatefulRow(
+        makeStateRow({
+          provider_key: "metric-recover-provider",
+          state: "open",
+          opened_at: new Date(Date.now() - 120_000).toISOString(),
+          recovery_timeout_ms: 60_000,
+        })
+      );
+
+      await service.isAvailable("metric-recover-provider");
+      expect(await readGauge("metric-recover-provider")).toBe(1);
+
+      await service.recordSuccess("metric-recover-provider");
+      expect(await readGauge("metric-recover-provider")).toBe(0);
+    });
+
+    it("sets the gauge on a manual force_open/force_closed override", async () => {
+      mockStatefulRow(makeStateRow({ provider_key: "metric-override-provider" }));
+
+      await service.setManualOverride("metric-override-provider", "force_open", "admin");
+      expect(await readGauge("metric-override-provider")).toBe(2);
+
+      await service.setManualOverride("metric-override-provider", "force_closed", "admin");
+      expect(await readGauge("metric-override-provider")).toBe(0);
     });
   });
 });

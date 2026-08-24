@@ -30,6 +30,9 @@ class MetricsService {
   public queueJobsFailed: Counter;
   public queueJobDuration: Histogram;
 
+  // Queue Metrics (lag)
+  public queueJobWaitDuration: Histogram;
+
   // Business Metrics
   public bridgeVerificationsTotal: Counter;
   public bridgeVerificationSuccess: Counter;
@@ -39,6 +42,7 @@ class MetricsService {
   public liquidityTVL: Gauge;
   public alertsTriggered: Counter;
   public circuitBreakerTrips: Counter;
+  public circuitBreakerState: Gauge;
 
   // Cache Metrics
   public cacheHits: Counter;
@@ -77,6 +81,7 @@ class MetricsService {
     this.queueJobsCompleted = undefined as any;
     this.queueJobsFailed = undefined as any;
     this.queueJobDuration = undefined as any;
+    this.queueJobWaitDuration = undefined as any;
     this.bridgeVerificationsTotal = undefined as any;
     this.bridgeVerificationSuccess = undefined as any;
     this.bridgeVerificationFailure = undefined as any;
@@ -85,6 +90,7 @@ class MetricsService {
     this.liquidityTVL = undefined as any;
     this.alertsTriggered = undefined as any;
     this.circuitBreakerTrips = undefined as any;
+    this.circuitBreakerState = undefined as any;
     this.cacheHits = undefined as any;
     this.cacheMisses = undefined as any;
     this.cacheSize = undefined as any;
@@ -219,6 +225,14 @@ class MetricsService {
       registers: [this.registry],
     });
 
+    this.queueJobWaitDuration = new Histogram({
+      name: "queue_job_wait_seconds",
+      help: "Time a job spent queued between being enqueued and processing starting (queue lag), in seconds",
+      labelNames: ["queue_name", "job_type"],
+      buckets: [0.1, 0.5, 1, 5, 10, 30, 60, 300, 600, 1800],
+      registers: [this.registry],
+    });
+
     // Business Metrics
     this.bridgeVerificationsTotal = new Counter({
       name: "bridge_verifications_total",
@@ -273,6 +287,13 @@ class MetricsService {
       name: "circuit_breaker_trips_total",
       help: "Total number of circuit breaker trips",
       labelNames: ["bridge_id", "reason"],
+      registers: [this.registry],
+    });
+
+    this.circuitBreakerState = new Gauge({
+      name: "circuit_breaker_state",
+      help: "Current circuit breaker state per protected dependency (0=closed, 1=half_open, 2=open)",
+      labelNames: ["provider_key"],
       registers: [this.registry],
     });
 
@@ -456,6 +477,20 @@ class MetricsService {
     }
     
     this.queueJobDuration.observe({ queue_name: queueName, job_type: jobType }, duration);
+  }
+
+  /**
+   * Record the current circuit breaker state for a protected dependency
+   * (e.g. a price/data provider). Values are encoded numerically so the
+   * gauge can be queried and alerted on directly (0=closed, 1=half_open, 2=open).
+   */
+  recordCircuitBreakerState(providerKey: string, state: "closed" | "half_open" | "open") {
+    const CIRCUIT_BREAKER_STATE_VALUES: Record<"closed" | "half_open" | "open", number> = {
+      closed: 0,
+      half_open: 1,
+      open: 2,
+    };
+    this.circuitBreakerState.set({ provider_key: providerKey }, CIRCUIT_BREAKER_STATE_VALUES[state]);
   }
 
   /**

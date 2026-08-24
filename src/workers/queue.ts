@@ -283,6 +283,12 @@ export class JobQueue {
         async (job: Job) => {
           const start = Date.now();
 
+          // Record how long the job sat in the queue before this worker picked
+          // it up (processing lag), so a backed-up queue is visible even
+          // though the depth gauge below only samples on a timer.
+          const waitSeconds = Math.max(0, (start - job.timestamp) / 1000);
+          metrics.queueJobWaitDuration.observe({ queue_name: queueName, job_type: job.name }, waitSeconds);
+
           // Increment in-flight gauge for this queue + job type
           metrics.queueJobsActive.inc({ queue_name: queueName, job_type: job.name });
 

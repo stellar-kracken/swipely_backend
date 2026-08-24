@@ -1,6 +1,7 @@
 import { getDatabase } from "../database/connection.js";
 import { auditService } from "./audit.service.js";
 import { logger } from "../utils/logger.js";
+import { getMetricsService } from "./metrics.service.js";
 
 export type BreakerState = "closed" | "open" | "half_open";
 export type ManualOverride = "force_open" | "force_closed" | null;
@@ -191,6 +192,9 @@ export class ProviderCircuitBreakerService {
     }
 
     await this.db("provider_circuit_breaker_state").where({ provider_key: providerKey }).update(updates);
+    if (override === "force_closed" || override === "force_open") {
+      this.syncStateMetric(providerKey, updates.state as BreakerState);
+    }
 
     await auditService.log({
       action: "provider.circuit_breaker_override",
@@ -251,6 +255,7 @@ export class ProviderCircuitBreakerService {
         trip_count: this.db.raw("trip_count + 1"),
       });
 
+    this.syncStateMetric(providerKey, "open");
     await this.recordTransition(providerKey, fromState, "open", reason);
 
     await auditService.log({
@@ -271,6 +276,7 @@ export class ProviderCircuitBreakerService {
     if (toState === "closed") updates.opened_at = null;
 
     await this.db("provider_circuit_breaker_state").where({ provider_key: providerKey }).update(updates);
+    this.syncStateMetric(providerKey, toState);
     await this.recordTransition(providerKey, fromState, toState, reason);
 
     if (toState === "half_open") {
@@ -297,7 +303,10 @@ export class ProviderCircuitBreakerService {
 
   private async ensureState(providerKey: string): Promise<Record<string, unknown>> {
     const existing = await this.db("provider_circuit_breaker_state").where({ provider_key: providerKey }).first();
-    if (existing) return existing;
+    if (existing) {
+      this.syncStateMetric(providerKey, existing.state as BreakerState);
+      return existing;
+    }
 
     const [row] = await this.db("provider_circuit_breaker_state")
       .insert({
@@ -310,7 +319,16 @@ export class ProviderCircuitBreakerService {
       .merge({})
       .returning("*");
 
+    this.syncStateMetric(providerKey, (row?.state as BreakerState) ?? "closed");
     return row;
+  }
+
+  /**
+   * Push the breaker's current state to the Prometheus gauge so operators can
+   * see and alert on open/half-open dependencies without querying the DB.
+   */
+  private syncStateMetric(providerKey: string, state: BreakerState): void {
+    getMetricsService().recordCircuitBreakerState(providerKey, state);
   }
 
   private mapRow(row: Record<string, unknown>): ProviderBreakerState {
