@@ -16,8 +16,9 @@ export default defineConfig({
     ],
     // These API suites boot the real Fastify server (buildServer) and/or open
     // live Postgres/Redis connections. They are integration tests, not unit
-    // tests, so they are excluded from the unit run. Run them against a real
-    // database via the integration config / a DB-backed CI job.
+    // tests, so they are excluded from the unit run. They are executed by the
+    // DB-backed `integration` CI job (Postgres + Redis service containers) via
+    // `npm run test:integration`.
     exclude: [
       "tests/api/smoke.test.ts",
       "tests/api/analytics.test.ts",

@@ -38,7 +38,10 @@ export default defineConfig({
       {
         test: {
           name: "integration",
-          include: ["tests/integration/**/*.test.ts"],
+          // The DB-backed API suites (smoke, analytics, circuitBreaker, exports)
+          // boot the server and require live Postgres + Redis. They are excluded
+          // from the unit run and executed here by the CI integration job.
+          include: ["tests/api/**/*.test.ts"],
           setupFiles: ["./tests/integration/setup.ts"],
           pool: "forks",
           poolOptions: {
